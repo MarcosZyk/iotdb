@@ -46,6 +46,7 @@ import org.apache.iotdb.db.utils.CommonUtils;
 import org.apache.iotdb.rpc.RpcTransportFactory;
 import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.rpc.TSStatusCode;
+import org.apache.iotdb.service.rpc.thrift.StorageGroupDistributionRes;
 import org.apache.iotdb.service.rpc.thrift.TSIService.Processor;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -221,6 +222,11 @@ public class ClientServer extends TSServiceImpl {
       return RpcUtils.getStatus(TSStatusCode.EXECUTE_STATEMENT_ERROR, e.getMessage());
     }
     return coordinator.executeNonQueryPlan(plan);
+  }
+
+  @Override
+  public StorageGroupDistributionRes getStorageGroupDistribution() {
+    return coordinator.getStorageGroupDistribution();
   }
 
   /**

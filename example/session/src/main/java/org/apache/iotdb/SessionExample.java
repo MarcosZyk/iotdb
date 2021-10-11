@@ -48,7 +48,7 @@ public class SessionExample {
   private static final String ROOT_SG1_D1_S4 = "root.sg1.d1.s4";
   private static final String ROOT_SG1_D1_S5 = "root.sg1.d1.s5";
   private static final String ROOT_SG1_D1 = "root.sg1.d1";
-  private static final String LOCAL_HOST = "127.0.0.1";
+  private static final String LOCAL_HOST = "192.168.130.31";
 
   public static void main(String[] args)
       throws IoTDBConnectionException, StatementExecutionException {
@@ -60,11 +60,17 @@ public class SessionExample {
 
     try {
       session.setStorageGroup("root.sg1");
+      session.setStorageGroup("root.sg2");
+      session.setStorageGroup("root.sg24324");
+      session.setStorageGroup("root.sg2424");
+      session.setStorageGroup("root.sg3213");
     } catch (StatementExecutionException e) {
       if (e.getStatusCode() != TSStatusCode.PATH_ALREADY_EXIST_ERROR.getStatusCode()) {
         throw e;
       }
     }
+
+    System.out.println(session.getStorageGroupDistribution());
 
     // createTemplate();
     createTimeseries();

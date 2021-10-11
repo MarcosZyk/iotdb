@@ -1499,6 +1499,10 @@ public class Session {
     defaultSessionConnection.testInsertRecord(request);
   }
 
+  public Map<String, EndPoint> getStorageGroupDistribution() throws IoTDBConnectionException {
+    return defaultSessionConnection.getStorageGroupDistribution();
+  }
+
   /**
    * delete a timeseries, including data and schema
    *

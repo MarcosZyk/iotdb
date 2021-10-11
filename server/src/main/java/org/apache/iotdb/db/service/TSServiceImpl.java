@@ -88,6 +88,7 @@ import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.service.rpc.thrift.EndPoint;
 import org.apache.iotdb.service.rpc.thrift.ServerProperties;
+import org.apache.iotdb.service.rpc.thrift.StorageGroupDistributionRes;
 import org.apache.iotdb.service.rpc.thrift.TSCancelOperationReq;
 import org.apache.iotdb.service.rpc.thrift.TSCloseOperationReq;
 import org.apache.iotdb.service.rpc.thrift.TSCloseSessionReq;
@@ -139,6 +140,7 @@ import java.sql.SQLException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -1854,6 +1856,20 @@ public class TSServiceImpl implements TSIService.Iface {
 
     TSStatus status = checkAuthority(plan, req.getSessionId());
     return status != null ? status : executeNonQueryPlan(plan);
+  }
+
+  @Override
+  public StorageGroupDistributionRes getStorageGroupDistribution() {
+    Map<String, EndPoint> result = new HashMap<>();
+    List<PartialPath> paths = IoTDB.metaManager.getAllStorageGroupPaths();
+    for (PartialPath path : paths) {
+      result.put(
+          path.getFullPath(),
+          new EndPoint(
+              IoTDBDescriptor.getInstance().getConfig().getRpcAddress(),
+              IoTDBDescriptor.getInstance().getConfig().getRpcPort()));
+    }
+    return new StorageGroupDistributionRes(result);
   }
 
   private TSStatus checkAuthority(PhysicalPlan plan, long sessionId) {

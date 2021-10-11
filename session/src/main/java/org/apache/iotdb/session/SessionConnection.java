@@ -60,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public class SessionConnection {
@@ -715,6 +716,22 @@ public class SessionConnection {
         try {
           request.setSessionId(sessionId);
           RpcUtils.verifySuccess(client.testInsertTablets(request));
+        } catch (TException tException) {
+          throw new IoTDBConnectionException(tException);
+        }
+      } else {
+        throw new IoTDBConnectionException(MSG_RECONNECTION_FAIL);
+      }
+    }
+  }
+
+  protected Map<String, EndPoint> getStorageGroupDistribution() throws IoTDBConnectionException {
+    try {
+      return client.getStorageGroupDistribution().getDistributions();
+    } catch (TException e) {
+      if (reconnect()) {
+        try {
+          return client.getStorageGroupDistribution().getDistributions();
         } catch (TException tException) {
           throw new IoTDBConnectionException(tException);
         }

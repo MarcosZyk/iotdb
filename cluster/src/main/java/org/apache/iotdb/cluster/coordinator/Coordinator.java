@@ -56,6 +56,7 @@ import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.service.rpc.thrift.EndPoint;
+import org.apache.iotdb.service.rpc.thrift.StorageGroupDistributionRes;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 
 import org.slf4j.Logger;
@@ -65,6 +66,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -153,6 +155,21 @@ public class Coordinator {
     return execRet
         ? RpcUtils.getStatus(TSStatusCode.SUCCESS_STATUS, "Execute successfully")
         : RpcUtils.getStatus(TSStatusCode.EXECUTE_STATEMENT_ERROR);
+  }
+
+  public StorageGroupDistributionRes getStorageGroupDistribution() {
+    Map<String, EndPoint> result = new HashMap<>();
+    try {
+      metaGroupMember.syncLeaderWithConsistencyCheck(false);
+    } catch (CheckConsistencyException e) {
+      e.printStackTrace();
+    }
+    List<PartialPath> paths = IoTDB.metaManager.getAllStorageGroupPaths();
+    for (PartialPath path : paths) {
+      Node node = metaGroupMember.getPartitionTable().routeToHeaderByTime(path.getFullPath(), 0);
+      result.put(path.getFullPath(), new EndPoint(node.getClientIp(), node.getClientPort()));
+    }
+    return new StorageGroupDistributionRes(result);
   }
 
   /**
