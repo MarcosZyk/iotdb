@@ -722,6 +722,10 @@ public class IoTDBDescriptor {
           Boolean.parseBoolean(
               properties.getProperty("metadata_disk_based", conf.isMetadataDiskBased() + "")));
 
+      conf.setMetaFileBlockSize(
+          Integer.parseInt(
+              properties.getProperty("metafile_block_size", conf.getMetaFileBlockSize() + "")));
+
       // At the same time, set TSFileConfig
       TSFileDescriptor.getInstance()
           .getConfig()

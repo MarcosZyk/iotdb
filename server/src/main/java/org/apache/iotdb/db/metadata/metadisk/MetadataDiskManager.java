@@ -118,8 +118,10 @@ public class MetadataDiskManager implements IMetadataAccess {
             "Failed to deserialize from {} because {}. Use a new MTree.",
             snapshotFile.getPath(),
             e);
-        this.metaFile.close();
-        this.metaFile = null;
+        if (this.metaFile != null) {
+          this.metaFile.close();
+          this.metaFile = null;
+        }
         Files.delete(metaFile.toPath());
       }
     }
@@ -495,6 +497,7 @@ public class MetadataDiskManager implements IMetadataAccess {
         metaFile.write(mNode);
         cacheStrategy.setModified(mNode, false);
       }
+      metaFile.sync();
     } finally {
       writeLock.unlock();
     }

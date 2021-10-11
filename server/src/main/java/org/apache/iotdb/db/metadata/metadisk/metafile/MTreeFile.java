@@ -64,7 +64,11 @@ public class MTreeFile {
   public MTreeFile(String filepath) throws IOException {
     File metaFile = new File(filepath);
     boolean isNew = !metaFile.exists();
-    fileAccess = new SlottedFile(filepath, HEADER_LENGTH, NODE_LENGTH);
+    fileAccess =
+        new SlottedFile(
+            filepath,
+            HEADER_LENGTH,
+            IoTDBDescriptor.getInstance().getConfig().getMetaFileBlockSize());
 
     if (isNew) {
       initMetaFileHeader();
@@ -374,7 +378,7 @@ public class MTreeFile {
       buffer.flip();
       fileAccess.writeBytes(position, buffer);
       freePosition.add(0, position);
-
+      buffer.clear();
       position = extension;
     }
   }

@@ -711,6 +711,8 @@ public class IoTDBConfig {
   /** the work mode of mmanager */
   private boolean metadataDiskBased = false;
 
+  private int metaFileBlockSize = 4096;
+
   public IoTDBConfig() {
     // empty constructor
   }
@@ -2287,5 +2289,13 @@ public class IoTDBConfig {
 
   public void setMetadataDiskBased(boolean metadataDiskBased) {
     this.metadataDiskBased = metadataDiskBased;
+  }
+
+  public int getMetaFileBlockSize() {
+    return metaFileBlockSize;
+  }
+
+  public void setMetaFileBlockSize(int metaFileBlockSize) {
+    this.metaFileBlockSize = metaFileBlockSize;
   }
 }

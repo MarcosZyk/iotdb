@@ -31,7 +31,8 @@ public class SlottedFile implements ISlottedFileAccess {
 
   private final int headerLength;
 
-  private volatile long currentBlockPosition = -1;
+  private volatile long currentBlockPosition;
+  private volatile boolean isModified = false;
   private final byte[] blockData;
   private final int blockScale;
   private final int blockSize;
@@ -44,10 +45,13 @@ public class SlottedFile implements ISlottedFileAccess {
 
     this.headerLength = headerLength;
 
-    blockScale = (int) Math.ceil(Math.log(blockSize));
+    blockScale = (int) Math.ceil(Math.log(blockSize) / Math.log(2));
     this.blockSize = 1 << blockScale;
     blockMask = 0xffffffffffffffffL << blockScale;
     blockData = new byte[this.blockSize];
+
+    currentBlockPosition = headerLength;
+    fileRead(currentBlockPosition, ByteBuffer.wrap(blockData));
   }
 
   @Override
@@ -91,71 +95,75 @@ public class SlottedFile implements ISlottedFileAccess {
   @Override
   public void readBytes(long position, ByteBuffer byteBuffer) throws IOException {
     ByteBuffer blockBuffer = ByteBuffer.wrap(blockData);
-    synchronized (blockData) {
-      long endPosition = position + (byteBuffer.limit() - byteBuffer.position());
 
-      // if the blockBuffer is empty or the target position is not in current block, read the
-      // according block
-      if (currentBlockPosition == -1
-          || position < currentBlockPosition
-          || position >= currentBlockPosition + blockSize) {
-        // get target block position
-        currentBlockPosition = ((position - headerLength) & blockMask) + headerLength;
-        // prepare blockBuffer for file read, set the position to 0 and limit to bufferSize
-        blockBuffer.position(0);
-        blockBuffer.limit(blockSize);
-        // read data from file
-        fileRead(currentBlockPosition, blockBuffer);
-      }
+    // read data from blockBuffer to buffer
+    updateDataBlock(position, blockBuffer);
+    blockBuffer.limit(
+        blockBuffer.position() + Math.min(byteBuffer.remaining(), blockBuffer.remaining()));
+    byteBuffer.put(blockBuffer);
 
-      // read data from blockBuffer to buffer
-      blockBuffer.position((int) (position - currentBlockPosition));
-      blockBuffer.limit(
-          Math.min(byteBuffer.limit() - byteBuffer.position(), blockSize - blockBuffer.position()));
+    // case the target data exist in several block
+    while (byteBuffer.hasRemaining()) {
+      // read next block from file
+      updateDataBlock(currentBlockPosition + blockSize, blockBuffer);
+
+      // read the rest target data to buffer
+      blockBuffer.limit(Math.min(byteBuffer.remaining(), blockSize));
       byteBuffer.put(blockBuffer);
-
-      // case the target data exist in several block
-      while (endPosition >= currentBlockPosition + blockSize) {
-        // read next block from file
-        currentBlockPosition += blockSize;
-        blockBuffer.position(0);
-        blockBuffer.limit(blockSize);
-        fileRead(currentBlockPosition, blockBuffer);
-
-        // read the rest target data to buffer
-        blockBuffer.position(0);
-        blockBuffer.limit(Math.min(byteBuffer.limit() - byteBuffer.position(), blockSize));
-        byteBuffer.put(blockBuffer);
-      }
-      blockBuffer.position(0);
-      blockBuffer.limit(blockSize);
-      byteBuffer.flip();
     }
+    byteBuffer.flip();
   }
 
   @Override
   public void writeBytes(long position, ByteBuffer byteBuffer) throws IOException {
+    ByteBuffer blockBuffer = ByteBuffer.wrap(blockData);
+
+    updateDataBlock(position, blockBuffer);
+    int limit = byteBuffer.limit();
+    byteBuffer.limit(
+        byteBuffer.position() + Math.min(byteBuffer.remaining(), blockBuffer.remaining()));
     synchronized (blockData) {
-      if (currentBlockPosition != -1 // initial state, empty blockBuffer
-          && position >= currentBlockPosition
-          && position < currentBlockPosition + blockSize) {
-        ByteBuffer blockBuffer = ByteBuffer.wrap(blockData);
-        // update the blockBuffer to the updated data
-        blockBuffer.position((int) (position - currentBlockPosition));
+      blockBuffer.put(byteBuffer);
+      isModified = true;
+    }
+    byteBuffer.limit(limit);
 
-        // record the origin state of byteBuffer
-        int limit = byteBuffer.limit();
-        byteBuffer.mark();
+    // case the target data exist in several block
+    while (byteBuffer.hasRemaining()) {
+      // read next block from file
+      updateDataBlock(currentBlockPosition + blockSize, blockBuffer);
 
-        // write data
-        byteBuffer.limit(Math.min(byteBuffer.limit(), blockSize - blockBuffer.position()));
+      // read the rest target data to buffer
+      byteBuffer.limit(byteBuffer.position() + Math.min(byteBuffer.remaining(), blockSize));
+      synchronized (blockData) {
         blockBuffer.put(byteBuffer);
-
-        // recover the byteBuffer attribute for file write
-        byteBuffer.reset();
-        byteBuffer.limit(limit);
+        isModified = true;
       }
-      fileWrite(position, byteBuffer);
+      byteBuffer.limit(limit);
+    }
+    blockBuffer.position(0);
+    blockBuffer.limit(blockSize);
+  }
+
+  private void updateDataBlock(long position, ByteBuffer blockBuffer) throws IOException {
+    synchronized (blockData) {
+      if (position < currentBlockPosition || position >= currentBlockPosition + blockSize) {
+
+        if (isModified) {
+          blockBuffer.position(0);
+          blockBuffer.limit(blockSize);
+          fileWrite(currentBlockPosition, blockBuffer);
+          isModified = false;
+        }
+
+        blockBuffer.position(0);
+        blockBuffer.limit(blockSize);
+        currentBlockPosition = ((position - headerLength) & blockMask) + headerLength;
+        fileRead(currentBlockPosition, blockBuffer);
+      }
+
+      blockBuffer.position((int) (position - currentBlockPosition));
+      blockBuffer.limit(blockSize);
     }
   }
 
@@ -173,12 +181,19 @@ public class SlottedFile implements ISlottedFileAccess {
 
   @Override
   public void sync() throws IOException {
-    channel.force(false);
+    synchronized (blockData) {
+      if (isModified) {
+        fileWrite(currentBlockPosition, ByteBuffer.wrap(blockData));
+        isModified = false;
+      }
+    }
+    channel.force(true);
   }
 
   @Override
   public void close() throws IOException {
     sync();
+    channel.force(true);
     channel.close();
     file.close();
   }
