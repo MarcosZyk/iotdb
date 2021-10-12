@@ -88,6 +88,8 @@ public class ClusterMain {
     // auto create schema is took over by cluster module, so we disable it in the server module.
     IoTDBDescriptor.getInstance().getConfig().setAutoCreateSchemaEnabled(false);
 
+    preStartCustomize();
+
     // params check
     try {
       ClusterDescriptor.getInstance().replaceHostnameWithIp();
@@ -262,7 +264,7 @@ public class ClusterMain {
     SlotPartitionTable.setSlotStrategy(
         new SlotStrategy() {
           SlotStrategy defaultStrategy = new SlotStrategy.DefaultStrategy();
-          int k = 3;
+          int k = ClusterDescriptor.getInstance().getConfig().getSeedNodeUrls().size();
 
           @Override
           public int calculateSlotByTime(String storageGroupName, long timestamp, int maxSlotNum) {
