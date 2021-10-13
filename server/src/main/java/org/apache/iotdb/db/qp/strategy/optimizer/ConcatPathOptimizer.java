@@ -427,7 +427,7 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
               String groupedPath =
                   AggregateUtils.generatePartialPathByLevel(
                       actualPath.getFullPath(), operator.getLevels());
-              groupedPath = selectOperator.getAggregations().get(i) + "(" + groupedPath + ")";
+              groupedPath = afterConcatAggregations.get(i) + "(" + groupedPath + ")";
               groupedPaths.add(groupedPath);
               if (groupedPaths.size() > limit) {
                 groupedPaths.remove(groupedPath);
