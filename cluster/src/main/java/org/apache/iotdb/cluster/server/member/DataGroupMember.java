@@ -82,8 +82,12 @@ import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.executor.PlanExecutor;
 import org.apache.iotdb.db.qp.physical.BatchPlan;
 import org.apache.iotdb.db.qp.physical.PhysicalPlan;
-import org.apache.iotdb.db.qp.physical.crud.*;
+import org.apache.iotdb.db.qp.physical.crud.InsertMultiTabletPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertPlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertRowsOfOneDevicePlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertRowsPlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertTabletPlan;
 import org.apache.iotdb.db.qp.physical.sys.FlushPlan;
 import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.db.utils.TestOnly;
@@ -802,7 +806,7 @@ public class DataGroupMember extends RaftMember {
 
   private boolean createTimeseriesForFailedInsertion(InsertPlan plan)
       throws CheckConsistencyException, IllegalPathException {
-    logger.info("create time series for failed insertion {}", plan);
+    logger.debug("create time series for failed insertion {}", plan);
     // apply measurements according to failed measurements
     if (plan instanceof InsertMultiTabletPlan) {
       for (InsertTabletPlan insertPlan : ((InsertMultiTabletPlan) plan).getInsertTabletPlanList()) {
