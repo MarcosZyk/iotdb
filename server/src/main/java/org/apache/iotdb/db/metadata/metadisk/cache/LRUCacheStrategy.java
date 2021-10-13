@@ -218,15 +218,23 @@ public class LRUCacheStrategy implements ICacheStrategy {
       }
 
       IMNode mNode = last.value;
-      IMNode parent = mNode.getParent();
-      while (parent != null && parent.getCacheEntry().isModified()) {
-        mNode = parent;
-        parent = mNode.getParent();
+      //      IMNode parent = mNode.getParent();
+      //      while (parent != null && parent.getCacheEntry().isModified()) {
+      //        mNode = parent;
+      //        parent = mNode.getParent();
+      //      }
+      //      collectModifiedRecursively(mNode, modifiedMNodes);
+      //
+      //      mNode = last.value;
+
+      LRUCacheEntry cacheEntry = last;
+      while (mNode.isStorageGroup() && cacheEntry.next != null) {
+        cacheEntry = cacheEntry.next;
+        mNode = cacheEntry.value;
       }
       collectModifiedRecursively(mNode, modifiedMNodes);
 
-      mNode = last.value;
-      removeRecursively(last.value);
+      removeRecursively(mNode);
       modifiedMNodes.add(0, mNode);
       return modifiedMNodes;
     } finally {

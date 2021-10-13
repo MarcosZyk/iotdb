@@ -33,4 +33,10 @@ public interface IPersistenceInfo {
   List<Long> getPositionList();
 
   void setPositionList(List<Long> positionList);
+
+  long get(int index);
+
+  void add(long value);
+
+  int size();
 }

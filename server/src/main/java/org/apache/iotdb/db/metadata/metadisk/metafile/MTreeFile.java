@@ -267,13 +267,12 @@ public class MTreeFile {
       }
     }
 
-    List<Long> positionList = mNode.getPersistenceInfo().getPositionList();
     IMNode parent = mNode.getParent();
     long parentPosition =
         (parent == null || !parent.isPersisted())
             ? 0
             : parent.getPersistenceInfo().getStartPosition();
-    writeBytesToFile(dataBuffer, bitmap, positionList, parentPosition);
+    writeBytesToFile(dataBuffer, bitmap, mNode.getPersistenceInfo(), parentPosition);
   }
 
   public void writeRecursively(IMNode mNode) throws IOException {
@@ -284,7 +283,7 @@ public class MTreeFile {
   }
 
   private void writeBytesToFile(
-      ByteBuffer dataBuffer, byte bitmap, List<Long> positionList, long parentPosition)
+      ByteBuffer dataBuffer, byte bitmap, IPersistenceInfo persistenceInfo, long parentPosition)
       throws IOException {
     int mNodeDataLength = dataBuffer.remaining();
     int mNodeLength = mNodeDataLength + 4; // length + data
@@ -293,16 +292,16 @@ public class MTreeFile {
     int dataBufferEnd = dataBuffer.limit();
 
     ByteBuffer buffer = ByteBuffer.allocate(nodeLength);
-    long currentPos = positionList.get(0);
+    long currentPos = persistenceInfo.get(0);
     long prePos = parentPosition;
     long extensionPos;
     if (bufferNum == 1) {
       extensionPos = 0;
-    } else if (positionList.size() > 1) {
-      extensionPos = positionList.get(1);
+    } else if (persistenceInfo.size() > 1) {
+      extensionPos = persistenceInfo.get(1);
     } else {
       extensionPos = getFreePos();
-      positionList.add(extensionPos);
+      persistenceInfo.add(extensionPos);
     }
 
     buffer.put(bitmap);
@@ -329,11 +328,11 @@ public class MTreeFile {
       buffer.putLong(prePos);
       if (i == bufferNum - 1) {
         extensionPos = 0;
-      } else if (positionList.size() > i + 1) {
-        extensionPos = positionList.get(i + 1);
+      } else if (persistenceInfo.size() > i + 1) {
+        extensionPos = persistenceInfo.get(i + 1);
       } else {
         extensionPos = getFreePos();
-        positionList.add(extensionPos);
+        persistenceInfo.add(extensionPos);
       }
       buffer.putLong(extensionPos);
       dataBuffer.limit(Math.min(dataBuffer.position() + NODE_DATA_LENGTH, dataBufferEnd));

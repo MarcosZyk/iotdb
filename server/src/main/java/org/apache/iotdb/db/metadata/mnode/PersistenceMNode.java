@@ -25,43 +25,69 @@ import org.apache.iotdb.db.metadata.metadisk.metafile.IPersistenceInfo;
 import org.apache.iotdb.db.metadata.template.Template;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class PersistenceMNode implements IPersistenceInfo, IMNode {
 
   /** offset in metafile */
-  private List<Long> positionList = new ArrayList<>();
+  private long[] positionList = new long[1];
 
-  public PersistenceMNode() {}
+  private int size = 0;
 
   public PersistenceMNode(long position) {
-    this.positionList.add(position);
-  }
-
-  public PersistenceMNode(List<Long> positionList) {
-    this.positionList.addAll(positionList);
+    size = 1;
+    positionList[0] = position;
   }
 
   public PersistenceMNode(IPersistenceInfo persistenceInfo) {
-    positionList.addAll(persistenceInfo.getPositionList());
+    setPositionList(persistenceInfo.getPositionList());
   }
 
   @Override
   public long getStartPosition() {
-    return positionList.get(0);
+    if (size == 0) {
+      return 0;
+    }
+    return positionList[0];
   }
 
   @Override
   public List<Long> getPositionList() {
-    return positionList;
+    List<Long> result = new ArrayList<>();
+    for (int i = 0; i < size; i++) {
+      result.add(positionList[i]);
+    }
+    return result;
   }
 
   @Override
   public void setPositionList(List<Long> positionList) {
-    this.positionList = positionList;
+    size = positionList.size();
+    if (this.positionList.length < size) {
+      this.positionList = new long[size];
+    }
+    for (int i = 0; i < size; i++) {
+      this.positionList[i] = positionList.get(i);
+    }
+  }
+
+  @Override
+  public long get(int index) {
+    return positionList[index];
+  }
+
+  @Override
+  public void add(long value) {
+    if (size == positionList.length) {
+      positionList = Arrays.copyOf(positionList, 2 * size);
+    }
+    positionList[size] = value;
+    size++;
+  }
+
+  @Override
+  public int size() {
+    return size;
   }
 
   @Override
@@ -92,9 +118,9 @@ public class PersistenceMNode implements IPersistenceInfo, IMNode {
   @Override
   public void setPersistenceInfo(IPersistenceInfo persistenceInfo) {
     if (persistenceInfo == null) {
-      positionList.clear();
+      size = 0;
     } else {
-      positionList = persistenceInfo.getPositionList();
+      setPositionList(persistenceInfo.getPositionList());
     }
   }
 
@@ -229,11 +255,11 @@ public class PersistenceMNode implements IPersistenceInfo, IMNode {
 
   @Override
   public boolean isDeleted() {
-    return positionList.get(0) == -1;
+    return positionList[0] == -1;
   }
 
   @Override
   public IMNode clone() {
-    return new PersistenceMNode(positionList);
+    return new PersistenceMNode(this);
   }
 }
