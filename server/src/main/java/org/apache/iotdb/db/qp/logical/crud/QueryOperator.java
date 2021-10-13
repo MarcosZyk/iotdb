@@ -44,7 +44,7 @@ public class QueryOperator extends SFWOperator {
   private boolean isFill = false;
 
   private boolean isGroupByLevel = false;
-  private int level = -1;
+  private int[] levels;
 
   private int rowLimit = 0;
   private int rowOffset = 0;
@@ -209,12 +209,12 @@ public class QueryOperator extends SFWOperator {
     this.isAlignByTime = isAlignByTime;
   }
 
-  public int getLevel() {
-    return level;
+  public int[] getLevels() {
+    return levels;
   }
 
-  public void setLevel(int level) {
-    this.level = level;
+  public void setLevels(int[] levels) {
+    this.levels = levels;
   }
 
   public boolean isGroupByTime() {
