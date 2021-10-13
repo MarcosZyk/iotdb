@@ -120,7 +120,6 @@ public class IoTDBAggregationByLevelIT {
       }
       Assert.assertEquals(retArray.length, cnt);
     }
-
   }
 
   @Test
@@ -227,6 +226,39 @@ public class IoTDBAggregationByLevelIT {
   }
 
   @Test
+  public void GroupByLevelSlimitTest() throws Exception {
+    String[] retArray = new String[] {"8", "600,700"};
+    try (Connection connection =
+            DriverManager.getConnection("jdbc:iotdb://127.0.0.1:6667/", "root", "root");
+        Statement statement = connection.createStatement()) {
+      statement.execute(
+          "select count(status), min_time(temperature) from root.*.* GROUP BY level=0 slimit 1");
+
+      int cnt = 0;
+      try (ResultSet resultSet = statement.getResultSet()) {
+        while (resultSet.next()) {
+          String ans = resultSet.getString(TestConstant.count("root.*.*.status"));
+          Assert.assertEquals(retArray[cnt], ans);
+          cnt++;
+        }
+      }
+
+      statement.execute("select max_time(status) from root.*.* GROUP BY level=1, 2 slimit 2");
+      try (ResultSet resultSet = statement.getResultSet()) {
+        while (resultSet.next()) {
+          String ans =
+              resultSet.getString(TestConstant.max_time("root.sg1.d1.status"))
+                  + ","
+                  + resultSet.getString(TestConstant.max_time("root.sg1.d2.status"));
+          Assert.assertEquals(retArray[cnt], ans);
+          cnt++;
+        }
+      }
+      Assert.assertEquals(retArray.length, cnt);
+    }
+  }
+
+  @Test
   public void valueFuncGroupByLevelTest() throws Exception {
     String[] retArray =
         new String[] {
@@ -324,10 +356,10 @@ public class IoTDBAggregationByLevelIT {
   public void groupByMultiLevelWithTimeIntervalTest() throws Exception {
     String[] retArray1 =
         new String[] {
-            "0.0", "88.24", "105.5", "0.0", "0.0", "125.5",
+          "0.0", "88.24", "105.5", "0.0", "0.0", "125.5",
         };
     try (Connection connection =
-        DriverManager.getConnection("jdbc:iotdb://127.0.0.1:6667/", "root", "root");
+            DriverManager.getConnection("jdbc:iotdb://127.0.0.1:6667/", "root", "root");
         Statement statement = connection.createStatement()) {
 
       statement.execute(

@@ -38,6 +38,7 @@ import org.apache.iotdb.db.qp.logical.crud.SFWOperator;
 import org.apache.iotdb.db.qp.logical.crud.SelectOperator;
 import org.apache.iotdb.db.query.udf.core.context.UDFContext;
 import org.apache.iotdb.db.service.IoTDB;
+import org.apache.iotdb.db.utils.AggregateUtils;
 import org.apache.iotdb.tsfile.utils.Pair;
 
 import org.slf4j.Logger;
@@ -98,13 +99,11 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
       if (!((QueryOperator) operator).isAlignByDevice()
           || ((QueryOperator) operator).isLastQuery()) {
         // concat paths and remove stars
-        int seriesLimit = ((QueryOperator) operator).getSeriesLimit();
-        int seriesOffset = ((QueryOperator) operator).getSeriesOffset();
+
         concatSelect(
             prefixPaths,
             select,
-            seriesLimit,
-            seriesOffset,
+            (QueryOperator) operator,
             ((QueryOperator) operator).getIndexType() == null);
       } else {
         isAlignByDevice = true;
@@ -179,8 +178,7 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
   private void concatSelect(
       List<PartialPath> fromPaths,
       SelectOperator selectOperator,
-      int limit,
-      int offset,
+      QueryOperator operator,
       boolean needRemoveStar)
       throws LogicalOptimizeException, PathNumOverLimitException {
     List<PartialPath> suffixPaths = judgeSelectOperator(selectOperator);
@@ -235,12 +233,7 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
 
     if (needRemoveStar) {
       removeStarsInPath(
-          afterConcatPaths,
-          afterConcatAggregations,
-          afterConcatUdfList,
-          selectOperator,
-          limit,
-          offset);
+          afterConcatPaths, afterConcatAggregations, afterConcatUdfList, selectOperator, operator);
     } else {
       selectOperator.setSuffixPathList(afterConcatPaths);
     }
@@ -368,16 +361,20 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
       List<String> afterConcatAggregations,
       List<UDFContext> afterConcatUdfList,
       SelectOperator selectOperator,
-      int finalLimit,
-      int finalOffset)
+      QueryOperator operator)
       throws LogicalOptimizeException, PathNumOverLimitException {
-    int offset = finalOffset;
-    int limit = finalLimit == 0 ? Integer.MAX_VALUE : finalLimit;
+    int offset = operator.getSeriesOffset();
+    int limit = operator.getSeriesLimit() == 0 ? Integer.MAX_VALUE : operator.getSeriesLimit();
+    if (operator.isGroupByLevel()) {
+      limit = Integer.MAX_VALUE;
+      offset = 0;
+    }
     int consumed = 0;
 
     List<PartialPath> newSuffixPathList = new ArrayList<>();
     List<String> newAggregations = new ArrayList<>();
     List<UDFContext> newUdfList = new ArrayList<>();
+    Set<String> groupedPaths = new HashSet<>();
 
     for (int i = 0; i < afterConcatPaths.size(); i++) {
       try {
@@ -425,26 +422,40 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
           Pair<List<PartialPath>, Integer> pair = removeWildcard(afterConcatPath, limit, offset);
           List<PartialPath> actualPaths = pair.left;
           checkAndSetTsAlias(actualPaths, afterConcatPath);
-
-          for (PartialPath actualPath : actualPaths) {
-            newSuffixPathList.add(actualPath);
-            extendListSafely(afterConcatAggregations, i, newAggregations);
-
-            newUdfList.add(null);
-          }
-
-          consumed += pair.right;
-          if (offset != 0) {
-            int delta = offset - pair.right;
-            offset = Math.max(delta, 0);
-            if (delta < 0) {
-              limit += delta;
+          if (operator.isGroupByLevel()) {
+            for (PartialPath actualPath : actualPaths) {
+              String groupedPath =
+                  AggregateUtils.generatePartialPathByLevel(
+                      actualPath.getFullPath(), operator.getLevels());
+              groupedPath = selectOperator.getAggregations().get(i) + "(" + groupedPath + ")";
+              groupedPaths.add(groupedPath);
+              if (groupedPaths.size() > limit) {
+                groupedPaths.remove(groupedPath);
+              } else {
+                newSuffixPathList.add(actualPath);
+                extendListSafely(afterConcatAggregations, i, newAggregations);
+                newUdfList.add(null);
+              }
             }
           } else {
-            limit -= pair.right;
+            for (PartialPath actualPath : actualPaths) {
+              newSuffixPathList.add(actualPath);
+              extendListSafely(afterConcatAggregations, i, newAggregations);
+              newUdfList.add(null);
+            }
+
+            consumed += pair.right;
+            if (offset != 0) {
+              int delta = offset - pair.right;
+              offset = Math.max(delta, 0);
+              if (delta < 0) {
+                limit += delta;
+              }
+            } else {
+              limit -= pair.right;
+            }
           }
         }
-
         if (limit == 0) {
           int maxDeduplicatedPathNum =
               IoTDBDescriptor.getInstance().getConfig().getMaxQueryDeduplicatedPathNum();
@@ -458,11 +469,11 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
       }
     }
 
-    if (consumed == 0 ? finalOffset != 0 : newSuffixPathList.isEmpty()) {
+    if (consumed == 0 ? operator.getSeriesOffset() != 0 : newSuffixPathList.isEmpty()) {
       throw new LogicalOptimizeException(
           String.format(
               "The value of SOFFSET (%d) is equal to or exceeds the number of sequences (%d) that can actually be returned.",
-              finalOffset, consumed));
+              operator.getSeriesOffset(), consumed));
     }
     selectOperator.setSuffixPathList(newSuffixPathList);
     selectOperator.setAggregations(newAggregations);
