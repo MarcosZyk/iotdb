@@ -358,11 +358,11 @@ public class SyncClientAdaptor {
     return handler.getResult(RaftServer.getReadOperationTimeoutMS());
   }
 
-  public static Integer getPathCount(
+  public static Long getPathCount(
       AsyncDataClient client, Node header, List<String> pathsToQuery, int level)
       throws InterruptedException, TException {
-    AtomicReference<Integer> remoteResult = new AtomicReference<>(null);
-    GenericHandler<Integer> handler = new GenericHandler<>(client.getNode(), remoteResult);
+    AtomicReference<Long> remoteResult = new AtomicReference<>(null);
+    GenericHandler<Long> handler = new GenericHandler<>(client.getNode(), remoteResult);
 
     client.getPathCount(header, pathsToQuery, level, handler);
     return handler.getResult(RaftServer.getReadOperationTimeoutMS());

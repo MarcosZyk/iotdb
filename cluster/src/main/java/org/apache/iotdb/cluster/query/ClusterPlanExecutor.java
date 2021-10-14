@@ -76,7 +76,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ClusterPlanExecutor extends PlanExecutor {
 
@@ -125,12 +125,12 @@ public class ClusterPlanExecutor extends PlanExecutor {
   }
 
   @Override
-  protected int getPathsNum(PartialPath path) throws MetadataException {
+  protected long getPathsNum(PartialPath path) throws MetadataException {
     return getNodesNumInGivenLevel(path, -1);
   }
 
   @Override
-  protected int getNodesNumInGivenLevel(PartialPath path, int level) throws MetadataException {
+  protected long getNodesNumInGivenLevel(PartialPath path, int level) throws MetadataException {
     // make sure this node knows all storage groups
     try {
       metaGroupMember.syncLeaderWithConsistencyCheck(false);
@@ -147,7 +147,7 @@ public class ClusterPlanExecutor extends PlanExecutor {
       throw new PathNotExistException(path.getFullPath());
     }
     logger.debug("The storage groups of path {} are {}", path, sgPathMap.keySet());
-    int ret;
+    long ret;
     try {
       ret = getPathCount(sgPathMap, level);
     } catch (CheckConsistencyException e) {
@@ -166,9 +166,9 @@ public class ClusterPlanExecutor extends PlanExecutor {
    * @return the number of paths that match the pattern at given level
    * @throws MetadataException
    */
-  private int getPathCount(Map<String, String> sgPathMap, int level)
+  private long getPathCount(Map<String, String> sgPathMap, int level)
       throws MetadataException, CheckConsistencyException {
-    AtomicInteger result = new AtomicInteger();
+    AtomicLong result = new AtomicLong();
     // split the paths by the data group they belong to
     Map<PartitionGroup, List<String>> groupPathMap = new HashMap<>();
     for (Entry<String, String> sgPathEntry : sgPathMap.entrySet()) {
@@ -197,8 +197,7 @@ public class ClusterPlanExecutor extends PlanExecutor {
         metaGroupMember
             .getLocalDataMember(partitionGroup.getHeader())
             .syncLeaderWithConsistencyCheck(false);
-        int localResult =
-            getLocalPathCount(new PartialPath(partitionGroupPathEntry.getValue().get(0)), level);
+        long localResult = IoTDB.metaManager.totalSeriesNumber.get();
         logger.debug(
             "{}: get path count of {} locally, result {}",
             metaGroupMember.getName(),
@@ -231,21 +230,21 @@ public class ClusterPlanExecutor extends PlanExecutor {
   private int getLocalPathCount(PartialPath path, int level) throws MetadataException {
     int localResult;
     if (level == -1) {
-      localResult = IoTDB.metaManager.getAllTimeseriesCount(path);
+      localResult = (int) IoTDB.metaManager.getAllTimeseriesCount(path);
     } else {
       localResult = IoTDB.metaManager.getNodesCountInGivenLevel(path, level);
     }
     return localResult;
   }
 
-  private int getRemotePathCount(
+  private Long getRemotePathCount(
       PartitionGroup partitionGroup, List<String> pathsToQuery, int level)
       throws MetadataException {
     // choose the node with lowest latency or highest throughput
     List<Node> coordinatedNodes = QueryCoordinator.getINSTANCE().reorderNodes(partitionGroup);
     for (Node node : coordinatedNodes) {
       try {
-        Integer count;
+        Long count;
         if (ClusterDescriptor.getInstance().getConfig().isUseAsyncServer()) {
           AsyncDataClient client =
               metaGroupMember
@@ -286,7 +285,7 @@ public class ClusterPlanExecutor extends PlanExecutor {
       }
     }
     logger.warn("Cannot get paths of {} from {}", pathsToQuery, partitionGroup);
-    return 0;
+    return 0L;
   }
 
   @Override

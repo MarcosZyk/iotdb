@@ -419,10 +419,7 @@ public class DataAsyncService extends BaseAsyncService implements TSDataService.
 
   @Override
   public void getPathCount(
-      Node header,
-      List<String> pathsToQuery,
-      int level,
-      AsyncMethodCallback<Integer> resultHandler) {
+      Node header, List<String> pathsToQuery, int level, AsyncMethodCallback<Long> resultHandler) {
     try {
       resultHandler.onComplete(
           dataGroupMember.getLocalQueryExecutor().getPathCount(pathsToQuery, level));

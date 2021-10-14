@@ -894,10 +894,10 @@ public class LocalQueryExecutor {
     return previousFill.getFillResult();
   }
 
-  public int getPathCount(List<String> pathsToQuery, int level)
+  public long getPathCount(List<String> pathsToQuery, int level)
       throws CheckConsistencyException, MetadataException {
     dataGroupMember.syncLeaderWithConsistencyCheck(false);
-    return (int) getCMManager().totalSeriesNumber.get();
+    return getCMManager().totalSeriesNumber.get();
   }
 
   @SuppressWarnings("java:S1135") // ignore todos

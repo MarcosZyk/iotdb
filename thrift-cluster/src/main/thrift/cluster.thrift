@@ -461,7 +461,7 @@ service TSDataService extends RaftService {
   **/
   binary last(1: LastQueryRequest request)
 
-  int getPathCount(1: Node header 2: list<string> pathsToQuery 3: int level)
+  long getPathCount(1: Node header 2: list<string> pathsToQuery 3: int level)
 
   /**
   * During slot transfer, when a member has pulled snapshot from a group, the member will use this

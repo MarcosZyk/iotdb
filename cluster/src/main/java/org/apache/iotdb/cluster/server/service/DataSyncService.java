@@ -396,7 +396,7 @@ public class DataSyncService extends BaseSyncService implements TSDataService.If
   }
 
   @Override
-  public int getPathCount(Node header, List<String> pathsToQuery, int level) throws TException {
+  public long getPathCount(Node header, List<String> pathsToQuery, int level) throws TException {
     try {
       return dataGroupMember.getLocalQueryExecutor().getPathCount(pathsToQuery, level);
     } catch (CheckConsistencyException | MetadataException e) {

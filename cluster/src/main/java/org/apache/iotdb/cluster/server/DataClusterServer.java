@@ -751,10 +751,7 @@ public class DataClusterServer extends RaftServer
 
   @Override
   public void getPathCount(
-      Node header,
-      List<String> pathsToQuery,
-      int level,
-      AsyncMethodCallback<Integer> resultHandler) {
+      Node header, List<String> pathsToQuery, int level, AsyncMethodCallback<Long> resultHandler) {
     DataAsyncService service = getDataAsyncService(header, resultHandler, "count path");
     service.getPathCount(header, pathsToQuery, level, resultHandler);
   }
@@ -887,7 +884,7 @@ public class DataClusterServer extends RaftServer
   }
 
   @Override
-  public int getPathCount(Node header, List<String> pathsToQuery, int level) throws TException {
+  public long getPathCount(Node header, List<String> pathsToQuery, int level) throws TException {
     return getDataSyncService(header).getPathCount(header, pathsToQuery, level);
   }
 

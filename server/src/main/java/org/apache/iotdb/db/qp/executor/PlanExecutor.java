@@ -602,8 +602,8 @@ public class PlanExecutor implements IPlanExecutor {
   }
 
   private QueryDataSet processCountNodes(CountPlan countPlan) throws MetadataException {
-    int num = getNodesNumInGivenLevel(countPlan.getPath(), countPlan.getLevel());
-    return createSingleDataSet(COLUMN_COUNT, TSDataType.INT32, num);
+    long num = getNodesNumInGivenLevel(countPlan.getPath(), countPlan.getLevel());
+    return createSingleDataSet(COLUMN_COUNT, TSDataType.INT64, num);
   }
 
   private QueryDataSet processCountNodeTimeSeries(CountPlan countPlan) throws MetadataException {
@@ -620,7 +620,7 @@ public class PlanExecutor implements IPlanExecutor {
       field.setBinaryV(new Binary(columnPath.getFullPath()));
       Field field1 = new Field(TSDataType.INT32);
       // get the count of every group
-      field1.setIntV(getPathsNum(columnPath));
+      field1.setIntV((int) getPathsNum(columnPath));
       record.addField(field);
       record.addField(field1);
       listDataSet.putRecord(record);
@@ -678,11 +678,11 @@ public class PlanExecutor implements IPlanExecutor {
     return IoTDB.metaManager.getStorageGroupNum(path);
   }
 
-  protected int getPathsNum(PartialPath path) throws MetadataException {
+  protected long getPathsNum(PartialPath path) throws MetadataException {
     return IoTDB.metaManager.getAllTimeseriesCount(path);
   }
 
-  protected int getNodesNumInGivenLevel(PartialPath path, int level) throws MetadataException {
+  protected long getNodesNumInGivenLevel(PartialPath path, int level) throws MetadataException {
     return IoTDB.metaManager.getNodesCountInGivenLevel(path, level);
   }
 
@@ -696,8 +696,8 @@ public class PlanExecutor implements IPlanExecutor {
   }
 
   private QueryDataSet processCountTimeSeries(CountPlan countPlan) throws MetadataException {
-    int num = getPathsNum(countPlan.getPath());
-    return createSingleDataSet(COLUMN_COUNT, TSDataType.INT32, num);
+    long num = getPathsNum(countPlan.getPath());
+    return createSingleDataSet(COLUMN_COUNT, TSDataType.INT64, num);
   }
 
   private QueryDataSet processShowDevices(ShowDevicesPlan showDevicesPlan)

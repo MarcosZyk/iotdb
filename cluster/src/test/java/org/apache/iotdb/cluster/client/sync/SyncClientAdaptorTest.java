@@ -249,8 +249,8 @@ public class SyncClientAdaptorTest {
               Node header,
               List<String> pathsToQuery,
               int level,
-              AsyncMethodCallback<Integer> resultHandler) {
-            resultHandler.onComplete(pathsToQuery.size());
+              AsyncMethodCallback<Long> resultHandler) {
+            resultHandler.onComplete((long) pathsToQuery.size());
           }
 
           @Override
@@ -387,7 +387,7 @@ public class SyncClientAdaptorTest {
         paths, SyncClientAdaptor.getAllPaths(dataClient, TestUtils.getNode(0), paths, false).paths);
     assertEquals(
         paths.size(),
-        (int) SyncClientAdaptor.getPathCount(dataClient, TestUtils.getNode(0), paths, 0));
+        (long) SyncClientAdaptor.getPathCount(dataClient, TestUtils.getNode(0), paths, 0));
     assertEquals(
         new HashSet<>(paths),
         SyncClientAdaptor.getAllDevices(dataClient, TestUtils.getNode(0), paths));
