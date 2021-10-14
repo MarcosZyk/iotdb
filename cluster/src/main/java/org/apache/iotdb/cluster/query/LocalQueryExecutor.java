@@ -897,16 +897,7 @@ public class LocalQueryExecutor {
   public int getPathCount(List<String> pathsToQuery, int level)
       throws CheckConsistencyException, MetadataException {
     dataGroupMember.syncLeaderWithConsistencyCheck(false);
-
-    int count = 0;
-    for (String s : pathsToQuery) {
-      if (level == -1) {
-        count += getCMManager().getAllTimeseriesCount(new PartialPath(s));
-      } else {
-        count += getCMManager().getNodesCountInGivenLevel(new PartialPath(s), level);
-      }
-    }
-    return count;
+    return (int) getCMManager().totalSeriesNumber.get();
   }
 
   @SuppressWarnings("java:S1135") // ignore todos

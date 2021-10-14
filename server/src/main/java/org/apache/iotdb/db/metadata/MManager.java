@@ -104,7 +104,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.iotdb.db.metadata.MetadataConstant.*;
+import static org.apache.iotdb.db.metadata.MetadataConstant.MTREE_DISK_BASED;
+import static org.apache.iotdb.db.metadata.MetadataConstant.MTREE_MEMORY_BASED;
 import static org.apache.iotdb.db.utils.EncodingInferenceUtils.getDefaultEncoding;
 import static org.apache.iotdb.tsfile.common.constant.TsFileConstant.PATH_SEPARATOR;
 
@@ -142,7 +143,7 @@ public class MManager {
   // tag key -> tag value -> LeafMNode
   private Map<String, Map<String, Set<MeasurementMNode>>> tagIndex = new ConcurrentHashMap<>();
 
-  private AtomicLong totalSeriesNumber = new AtomicLong();
+  public AtomicLong totalSeriesNumber = new AtomicLong();
   private boolean initialized;
   protected static IoTDBConfig config = IoTDBDescriptor.getInstance().getConfig();
 
