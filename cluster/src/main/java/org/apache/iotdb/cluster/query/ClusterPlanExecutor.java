@@ -177,25 +177,10 @@ public class ClusterPlanExecutor extends PlanExecutor {
       // find the data group that should hold the timeseries schemas of the storage group
       PartitionGroup partitionGroup =
           metaGroupMember.getPartitionTable().route(storageGroupName, 0);
-      if (partitionGroup.contains(metaGroupMember.getThisNode())) {
-        // this node is a member of the group, perform a local query after synchronizing with the
-        // leader
-        metaGroupMember
-            .getLocalDataMember(partitionGroup.getHeader())
-            .syncLeaderWithConsistencyCheck(false);
-        int localResult = getLocalPathCount(pathUnderSG, level);
-        logger.debug(
-            "{}: get path count of {} locally, result {}",
-            metaGroupMember.getName(),
-            partitionGroup,
-            localResult);
-        result.addAndGet(localResult);
-      } else {
-        // batch the queries of the same group to reduce communication
-        groupPathMap
-            .computeIfAbsent(partitionGroup, p -> new ArrayList<>())
-            .add(pathUnderSG.getFullPath());
-      }
+      // batch the queries of the same group to reduce communication
+      groupPathMap
+          .computeIfAbsent(partitionGroup, p -> new ArrayList<>())
+          .add(pathUnderSG.getFullPath());
     }
     if (groupPathMap.isEmpty()) {
       return result.get();
@@ -206,21 +191,37 @@ public class ClusterPlanExecutor extends PlanExecutor {
     // query each data group separately
     for (Entry<PartitionGroup, List<String>> partitionGroupPathEntry : groupPathMap.entrySet()) {
       PartitionGroup partitionGroup = partitionGroupPathEntry.getKey();
-      List<String> pathsToQuery = partitionGroupPathEntry.getValue();
-      remoteFutures.add(
-          remoteQueryThreadPool.submit(
-              () -> {
-                try {
-                  result.addAndGet(getRemotePathCount(partitionGroup, pathsToQuery, level));
-                } catch (MetadataException e) {
-                  logger.warn(
-                      "Cannot get remote path count of {} from {}",
-                      pathsToQuery,
-                      partitionGroup,
-                      e);
-                }
-                return null;
-              }));
+      if (partitionGroup.contains(metaGroupMember.getThisNode())) {
+        // this node is a member of the group, perform a local query after synchronizing with the
+        // leader
+        metaGroupMember
+            .getLocalDataMember(partitionGroup.getHeader())
+            .syncLeaderWithConsistencyCheck(false);
+        int localResult =
+            getLocalPathCount(new PartialPath(partitionGroupPathEntry.getValue().get(0)), level);
+        logger.debug(
+            "{}: get path count of {} locally, result {}",
+            metaGroupMember.getName(),
+            partitionGroup,
+            localResult);
+        result.addAndGet(localResult);
+      } else {
+        List<String> pathsToQuery = partitionGroupPathEntry.getValue();
+        remoteFutures.add(
+            remoteQueryThreadPool.submit(
+                () -> {
+                  try {
+                    result.addAndGet(getRemotePathCount(partitionGroup, pathsToQuery, level));
+                  } catch (MetadataException e) {
+                    logger.warn(
+                        "Cannot get remote path count of {} from {}",
+                        pathsToQuery,
+                        partitionGroup,
+                        e);
+                  }
+                  return null;
+                }));
+      }
     }
     waitForThreadPool(remoteFutures, remoteQueryThreadPool, "getPathCount()");
 
