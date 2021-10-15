@@ -65,7 +65,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -238,10 +237,10 @@ public class Coordinator {
       return StatusUtils.PARTITION_TABLE_NOT_READY;
     }
 
-    if (!checkPrivilegeForBatchExecution(plan)) {
-      return concludeFinalStatus(
-          plan, plan.getPaths().size(), true, null, false, null, Collections.emptyList());
-    }
+    //    if (!checkPrivilegeForBatchExecution(plan)) {
+    //      return concludeFinalStatus(
+    //          plan, plan.getPaths().size(), true, null, false, null, Collections.emptyList());
+    //    }
 
     // split the plan into sub-plans that each only involve one data group
     Map<PhysicalPlan, PartitionGroup> planGroupMap;
@@ -374,12 +373,12 @@ public class Coordinator {
     // e.g., an InsertTabletPlan contains 3 rows, row1 and row3 belong to NodeA and row2
     // belongs to NodeB, when NodeA returns a success while NodeB returns a failure, the
     // failure and success should be placed into proper positions in TSStatus.subStatus
-    if (plan instanceof InsertMultiTabletPlan
+    if (planGroupMap.size() == 1) {
+      status = forwardToSingleGroup(planGroupMap.entrySet().iterator().next());
+    } else if (plan instanceof InsertMultiTabletPlan
         || plan instanceof CreateMultiTimeSeriesPlan
         || plan instanceof InsertRowsPlan) {
       status = forwardMultiSubPlan(planGroupMap, plan);
-    } else if (planGroupMap.size() == 1) {
-      status = forwardToSingleGroup(planGroupMap.entrySet().iterator().next());
     } else {
       status = forwardToMultipleGroup(planGroupMap);
     }
