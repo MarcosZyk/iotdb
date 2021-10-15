@@ -290,11 +290,8 @@ public class ClusterMain {
 
           private int extractSerialNumInSGName(String storageGroupName) {
             String[] s = storageGroupName.split("_");
-            if (s.length != 2) {
-              return -1;
-            }
             try {
-              return Integer.parseInt(s[1]);
+              return Integer.parseInt(s[s.length - 1]);
             } catch (NumberFormatException e) {
               return -1;
             }
