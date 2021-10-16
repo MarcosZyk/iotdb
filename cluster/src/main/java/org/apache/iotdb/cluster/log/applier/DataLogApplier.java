@@ -37,6 +37,7 @@ import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.physical.PhysicalPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertMultiTabletPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertPlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertRowsPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertTabletPlan;
 import org.apache.iotdb.db.service.IoTDB;
@@ -126,6 +127,23 @@ public class DataLogApplier extends BaseApplier {
 
   private void applyInsert(InsertRowsPlan plan)
       throws StorageGroupNotSetException, QueryProcessException, StorageEngineException {
+    boolean hasSync = false;
+    for (InsertRowPlan insertRowPlan : plan.getInsertRowPlanList()) {
+      try {
+        IoTDB.metaManager.getStorageGroupPath(insertRowPlan.getDeviceId());
+      } catch (StorageGroupNotSetException e) {
+        try {
+          if (!hasSync) {
+            metaGroupMember.syncLeaderWithConsistencyCheck(true);
+            hasSync = true;
+          } else {
+            throw new StorageEngineException(e.getMessage());
+          }
+        } catch (CheckConsistencyException ce) {
+          throw new QueryProcessException(ce.getMessage());
+        }
+      }
+    }
     applyPhysicalPlan(plan, dataGroupMember);
   }
 
