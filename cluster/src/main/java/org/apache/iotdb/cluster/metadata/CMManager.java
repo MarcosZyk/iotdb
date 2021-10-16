@@ -46,7 +46,6 @@ import org.apache.iotdb.db.metadata.MManager;
 import org.apache.iotdb.db.metadata.MetaUtils;
 import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.metadata.mnode.IMNode;
-import org.apache.iotdb.db.metadata.mnode.InternalMNode;
 import org.apache.iotdb.db.metadata.mnode.MeasurementMNode;
 import org.apache.iotdb.db.metadata.template.Template;
 import org.apache.iotdb.db.qp.constant.SQLConstant;
@@ -263,7 +262,7 @@ public class CMManager extends MManager {
   private int getMNodesLocally(
       PartialPath deviceId, String[] measurements, MeasurementMNode[] measurementMNodes) {
     int failedMeasurementIndex = -1;
-    cacheLock.readLock().lock();
+    //    cacheLock.readLock().lock();
     try {
       for (int i = 0; i < measurements.length && failedMeasurementIndex == -1; i++) {
         MeasurementMNode measurementMNode =
@@ -275,7 +274,7 @@ public class CMManager extends MManager {
         }
       }
     } finally {
-      cacheLock.readLock().unlock();
+      //      cacheLock.readLock().unlock();
     }
     return failedMeasurementIndex;
   }
@@ -337,15 +336,17 @@ public class CMManager extends MManager {
   @Override
   public IMNode getSeriesSchemasAndReadLockDevice(InsertPlan plan)
       throws MetadataException, IOException {
-    MeasurementMNode[] measurementMNodes = new MeasurementMNode[plan.getMeasurements().length];
-    int nonExistSchemaIndex =
-        getMNodesLocally(plan.getDeviceId(), plan.getMeasurements(), measurementMNodes);
-    if (nonExistSchemaIndex == -1) {
-      plan.setMeasurementMNodes(measurementMNodes);
-      return new InternalMNode(null, plan.getDeviceId().getDevice());
-    }
-    // auto-create schema in IoTDBConfig is always disabled in the cluster version, and we have
-    // another config in ClusterConfig to do this
+    //    MeasurementMNode[] measurementMNodes = new
+    // MeasurementMNode[plan.getMeasurements().length];
+    //    int nonExistSchemaIndex =
+    //        getMNodesLocally(plan.getDeviceId(), plan.getMeasurements(), measurementMNodes);
+    //    if (nonExistSchemaIndex == -1) {
+    //      plan.setMeasurementMNodes(measurementMNodes);
+    //      return new InternalMNode(null, plan.getDeviceId().getDevice());
+    //    }
+    //    // auto-create schema in IoTDBConfig is always disabled in the cluster version, and we
+    // have
+    //    // another config in ClusterConfig to do this
     return super.getSeriesSchemasAndReadLockDevice(plan);
   }
 
