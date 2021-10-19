@@ -146,14 +146,19 @@ public class ClusterPlanExecutor extends PlanExecutor {
     if (sgPathMap.isEmpty()) {
       throw new PathNotExistException(path.getFullPath());
     }
-    logger.debug("The storage groups of path {} are {}", path, sgPathMap.keySet());
+    logger.info(
+        "The storage groups of path {} are {},size is {}, total sgNum: {}",
+        path,
+        sgPathMap.keySet(),
+        sgPathMap.keySet().size(),
+        IoTDB.metaManager.getStorageGroupNum(path));
     long ret;
     try {
       ret = getPathCount(sgPathMap, level);
     } catch (CheckConsistencyException e) {
       throw new MetadataException(e);
     }
-    logger.debug("The number of paths satisfying {}@{} is {}", path, level, ret);
+    logger.info("The number of paths satisfying {}@{} is {}", path, level, ret);
     return ret;
   }
 
@@ -198,10 +203,11 @@ public class ClusterPlanExecutor extends PlanExecutor {
             .getLocalDataMember(partitionGroup.getHeader())
             .syncLeaderWithConsistencyCheck(false);
         long localResult = IoTDB.metaManager.totalSeriesNumber.get();
-        logger.debug(
-            "{}: get path count of {} locally, result {}",
+        logger.info(
+            "{}: get path count of {} locally with {}, result {}",
             metaGroupMember.getName(),
             partitionGroup,
+            partitionGroupPathEntry.getValue(),
             localResult);
         result.addAndGet(localResult);
       } else {
@@ -268,11 +274,12 @@ public class ClusterPlanExecutor extends PlanExecutor {
             }
           }
         }
-        logger.debug(
-            "{}: get path count of {} from {}, result {}",
+        logger.info(
+            "{}: get path count of {} from {} with {}, result {}",
             metaGroupMember.getName(),
             partitionGroup,
             node,
+            pathsToQuery,
             count);
         if (count != null) {
           return count;
