@@ -151,11 +151,12 @@ public class TestAsyncDataClient extends AsyncDataClient {
       Node header,
       List<String> paths,
       boolean withAlias,
+      int limit,
       AsyncMethodCallback<GetAllPathsResult> resultHandler) {
     new Thread(
             () ->
                 new DataAsyncService(dataGroupMemberMap.get(header))
-                    .getAllPaths(header, paths, withAlias, resultHandler))
+                    .getAllPaths(header, paths, withAlias, limit, resultHandler))
         .start();
   }
 

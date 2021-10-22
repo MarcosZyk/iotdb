@@ -383,10 +383,11 @@ public class DataClusterServer extends RaftServer
       Node header,
       List<String> paths,
       boolean withAlias,
+      int limit,
       AsyncMethodCallback<GetAllPathsResult> resultHandler) {
     DataAsyncService service = getDataAsyncService(header, resultHandler, "Find path:" + paths);
     if (service != null) {
-      service.getAllPaths(header, paths, withAlias, resultHandler);
+      service.getAllPaths(header, paths, withAlias, limit, resultHandler);
     }
   }
 
@@ -801,9 +802,9 @@ public class DataClusterServer extends RaftServer
   }
 
   @Override
-  public GetAllPathsResult getAllPaths(Node header, List<String> path, boolean withAlias)
+  public GetAllPathsResult getAllPaths(Node header, List<String> path, boolean withAlias, int limit)
       throws TException {
-    return getDataSyncService(header).getAllPaths(header, path, withAlias);
+    return getDataSyncService(header).getAllPaths(header, path, withAlias, limit);
   }
 
   @Override

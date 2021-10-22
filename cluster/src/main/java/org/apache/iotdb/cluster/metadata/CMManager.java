@@ -1147,8 +1147,8 @@ public class CMManager extends MManager {
    *     storage group added
    * @return a collection of all queried paths
    */
-  private List<PartialPath> getMatchedPaths(Map<String, String> sgPathMap, boolean withAlias)
-      throws MetadataException {
+  private List<PartialPath> getMatchedPaths(
+      Map<String, String> sgPathMap, boolean withAlias, int limit) throws MetadataException {
     List<PartialPath> result = new ArrayList<>();
     // split the paths by the data group they belong to
     Map<PartitionGroup, List<String>> groupPathMap = new HashMap<>();
@@ -1166,7 +1166,7 @@ public class CMManager extends MManager {
         } catch (CheckConsistencyException e) {
           logger.warn("Failed to check consistency.", e);
         }
-        List<PartialPath> allTimeseriesName = getMatchedPathsLocally(pathUnderSG, withAlias);
+        List<PartialPath> allTimeseriesName = getMatchedPathsLocally(pathUnderSG, withAlias, limit);
         logger.debug(
             "{}: get matched paths of {} locally, result {}",
             metaGroupMember.getName(),
@@ -1181,34 +1181,36 @@ public class CMManager extends MManager {
       }
     }
 
+    int curLimit = limit - result.size();
+
     // query each data group separately
     for (Entry<PartitionGroup, List<String>> partitionGroupPathEntry : groupPathMap.entrySet()) {
+      if (curLimit <= 0) {
+        break;
+      }
       PartitionGroup partitionGroup = partitionGroupPathEntry.getKey();
       List<String> pathsToQuery = partitionGroupPathEntry.getValue();
-      result.addAll(getMatchedPaths(partitionGroup, pathsToQuery, withAlias));
+      result.addAll(getMatchedPaths(partitionGroup, pathsToQuery, withAlias, curLimit));
+      curLimit = limit - result.size();
     }
 
     return result;
   }
 
-  private List<PartialPath> getMatchedPathsLocally(PartialPath partialPath, boolean withAlias)
-      throws MetadataException {
-    if (!withAlias) {
-      return getAllTimeseriesPath(partialPath);
-    } else {
-      return super.getAllTimeseriesPathWithAlias(partialPath, -1, -1).left;
-    }
+  private List<PartialPath> getMatchedPathsLocally(
+      PartialPath partialPath, boolean withAlias, int limit) throws MetadataException {
+    return super.getAllTimeseriesPathWithAlias(partialPath, limit, -1).left;
   }
 
   private List<PartialPath> getMatchedPaths(
-      PartitionGroup partitionGroup, List<String> pathsToQuery, boolean withAlias)
+      PartitionGroup partitionGroup, List<String> pathsToQuery, boolean withAlias, int limit)
       throws MetadataException {
     // choose the node with lowest latency or highest throughput
     List<Node> coordinatedNodes = QueryCoordinator.getINSTANCE().reorderNodes(partitionGroup);
     for (Node node : coordinatedNodes) {
       try {
         List<PartialPath> paths =
-            getMatchedPaths(node, partitionGroup.getHeader(), pathsToQuery, withAlias);
+            getMatchedPaths(node, partitionGroup.getHeader(), pathsToQuery, withAlias, limit);
         if (logger.isDebugEnabled()) {
           logger.debug(
               "{}: get matched paths of {} and other {} paths from {} in {}, result {}",
@@ -1236,7 +1238,7 @@ public class CMManager extends MManager {
 
   @SuppressWarnings("java:S1168") // null and empty list are different
   private List<PartialPath> getMatchedPaths(
-      Node node, Node header, List<String> pathsToQuery, boolean withAlias)
+      Node node, Node header, List<String> pathsToQuery, boolean withAlias, int limit)
       throws IOException, TException, InterruptedException {
     GetAllPathsResult result;
     if (ClusterDescriptor.getInstance().getConfig().isUseAsyncServer()) {
@@ -1244,14 +1246,14 @@ public class CMManager extends MManager {
           metaGroupMember
               .getClientProvider()
               .getAsyncDataClient(node, RaftServer.getReadOperationTimeoutMS());
-      result = SyncClientAdaptor.getAllPaths(client, header, pathsToQuery, withAlias);
+      result = SyncClientAdaptor.getAllPaths(client, header, pathsToQuery, withAlias, limit);
     } else {
       try (SyncDataClient syncDataClient =
           metaGroupMember
               .getClientProvider()
               .getSyncDataClient(node, RaftServer.getReadOperationTimeoutMS())) {
         try {
-          result = syncDataClient.getAllPaths(header, pathsToQuery, withAlias);
+          result = syncDataClient.getAllPaths(header, pathsToQuery, withAlias, limit);
         } catch (TException e) {
           // the connection may be broken, close it to avoid it being reused
           syncDataClient.getInputProtocol().getTransport().close();
@@ -1404,7 +1406,7 @@ public class CMManager extends MManager {
     // "root.*" will be translated into:
     // "root.group1" -> "root.group1.*", "root.group2" -> "root.group2.*" ...
     Map<String, String> sgPathMap = determineStorageGroup(prefixPath);
-    List<PartialPath> result = getMatchedPaths(sgPathMap, true);
+    List<PartialPath> result = getMatchedPaths(sgPathMap, true, limit);
 
     int skippedOffset = 0;
     // apply offset and limit
@@ -1436,7 +1438,7 @@ public class CMManager extends MManager {
     // "root.*" will be translated into:
     // "root.group1" -> "root.group1.*", "root.group2" -> "root.group2.*" ...
     Map<String, String> sgPathMap = determineStorageGroup(originPath);
-    List<PartialPath> ret = getMatchedPaths(sgPathMap, false);
+    List<PartialPath> ret = getMatchedPaths(sgPathMap, false, -1);
     logger.debug("The paths of path {} are {}", originPath, ret);
     return ret;
   }
@@ -1886,7 +1888,7 @@ public class CMManager extends MManager {
     return resultBinary;
   }
 
-  public GetAllPathsResult getAllPaths(List<String> paths, boolean withAlias)
+  public GetAllPathsResult getAllPaths(List<String> paths, boolean withAlias, int limit)
       throws MetadataException {
     List<String> retPaths = new ArrayList<>();
     List<String> alias = null;
@@ -1894,17 +1896,15 @@ public class CMManager extends MManager {
       alias = new ArrayList<>();
     }
 
-    if (withAlias) {
-      for (String path : paths) {
-        List<PartialPath> allTimeseriesPathWithAlias =
-            super.getAllTimeseriesPathWithAlias(new PartialPath(path), -1, -1).left;
-        for (PartialPath timeseriesPathWithAlias : allTimeseriesPathWithAlias) {
-          retPaths.add(timeseriesPathWithAlias.getFullPath());
+    for (String path : paths) {
+      List<PartialPath> allTimeseriesPathWithAlias =
+          super.getAllTimeseriesPathWithAlias(new PartialPath(path), limit, -1).left;
+      for (PartialPath timeseriesPathWithAlias : allTimeseriesPathWithAlias) {
+        retPaths.add(timeseriesPathWithAlias.getFullPath());
+        if (withAlias) {
           alias.add(timeseriesPathWithAlias.getMeasurementAlias());
         }
       }
-    } else {
-      retPaths = getAllPaths(paths);
     }
 
     GetAllPathsResult getAllPathsResult = new GetAllPathsResult();

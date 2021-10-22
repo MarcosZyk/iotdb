@@ -272,10 +272,12 @@ public class DataAsyncService extends BaseAsyncService implements TSDataService.
       Node header,
       List<String> paths,
       boolean withAlias,
+      int limit,
       AsyncMethodCallback<GetAllPathsResult> resultHandler) {
     try {
       dataGroupMember.syncLeaderWithConsistencyCheck(false);
-      resultHandler.onComplete(((CMManager) IoTDB.metaManager).getAllPaths(paths, withAlias));
+      resultHandler.onComplete(
+          ((CMManager) IoTDB.metaManager).getAllPaths(paths, withAlias, limit));
     } catch (MetadataException | CheckConsistencyException e) {
       resultHandler.onError(e);
     }

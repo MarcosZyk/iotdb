@@ -953,7 +953,7 @@ public class DataGroupMemberTest extends BaseMember {
     GenericHandler<GetAllPathsResult> handler =
         new GenericHandler<>(TestUtils.getNode(0), pathResult);
     new DataAsyncService(dataGroupMember)
-        .getAllPaths(TestUtils.getNode(0), Collections.singletonList(path), false, handler);
+        .getAllPaths(TestUtils.getNode(0), Collections.singletonList(path), false, -1, handler);
     List<String> result = pathResult.get().paths;
     assertEquals(20, result.size());
     for (int i = 0; i < 10; i++) {

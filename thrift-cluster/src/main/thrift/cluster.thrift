@@ -396,7 +396,7 @@ service TSDataService extends RaftService {
   /**
   * Given path patterns (paths with wildcard), return all paths they match.
   **/
-  GetAllPathsResult getAllPaths(1:Node header, 2:list<string> path, 3:bool withAlias)
+  GetAllPathsResult getAllPaths(1:Node header, 2:list<string> path, 3:bool withAlias, 4:int limit)
 
   /**
    * Given path patterns (paths with wildcard), return all devices they match.

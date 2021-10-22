@@ -240,6 +240,7 @@ public class SyncClientAdaptorTest {
               Node header,
               List<String> path,
               boolean withAlias,
+              int limit,
               AsyncMethodCallback<GetAllPathsResult> resultHandler) {
             resultHandler.onComplete(new GetAllPathsResult(path));
           }
@@ -384,7 +385,8 @@ public class SyncClientAdaptorTest {
         paths.subList(0, paths.size() / 2),
         SyncClientAdaptor.getUnregisteredMeasurements(dataClient, TestUtils.getNode(0), paths));
     assertEquals(
-        paths, SyncClientAdaptor.getAllPaths(dataClient, TestUtils.getNode(0), paths, false).paths);
+        paths,
+        SyncClientAdaptor.getAllPaths(dataClient, TestUtils.getNode(0), paths, false, -1).paths);
     assertEquals(
         paths.size(),
         (long) SyncClientAdaptor.getPathCount(dataClient, TestUtils.getNode(0), paths, 0));

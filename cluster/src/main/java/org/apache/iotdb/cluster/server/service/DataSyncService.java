@@ -262,11 +262,11 @@ public class DataSyncService extends BaseSyncService implements TSDataService.If
   }
 
   @Override
-  public GetAllPathsResult getAllPaths(Node header, List<String> paths, boolean withAlias)
-      throws TException {
+  public GetAllPathsResult getAllPaths(
+      Node header, List<String> paths, boolean withAlias, int limit) throws TException {
     try {
       dataGroupMember.syncLeaderWithConsistencyCheck(false);
-      return ((CMManager) IoTDB.metaManager).getAllPaths(paths, withAlias);
+      return ((CMManager) IoTDB.metaManager).getAllPaths(paths, withAlias, limit);
     } catch (MetadataException | CheckConsistencyException e) {
       throw new TException(e);
     }

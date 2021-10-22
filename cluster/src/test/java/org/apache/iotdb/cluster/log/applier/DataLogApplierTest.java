@@ -180,11 +180,12 @@ public class DataLogApplierTest extends IoTDBTest {
                   Node header,
                   List<String> path,
                   boolean withAlias,
+                  int limit,
                   AsyncMethodCallback<GetAllPathsResult> resultHandler) {
                 new Thread(
                         () ->
                             new DataAsyncService(testDataGroupMember)
-                                .getAllPaths(header, path, withAlias, resultHandler))
+                                .getAllPaths(header, path, withAlias, limit, resultHandler))
                     .start();
               }
 

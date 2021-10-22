@@ -348,13 +348,13 @@ public class SyncClientAdaptor {
   }
 
   public static GetAllPathsResult getAllPaths(
-      AsyncDataClient client, Node header, List<String> pathsToQuery, boolean withAlias)
+      AsyncDataClient client, Node header, List<String> pathsToQuery, boolean withAlias, int limit)
       throws InterruptedException, TException {
     AtomicReference<GetAllPathsResult> remoteResult = new AtomicReference<>();
     GenericHandler<GetAllPathsResult> handler =
         new GenericHandler<>(client.getNode(), remoteResult);
 
-    client.getAllPaths(header, pathsToQuery, withAlias, handler);
+    client.getAllPaths(header, pathsToQuery, withAlias, limit, handler);
     return handler.getResult(RaftServer.getReadOperationTimeoutMS());
   }
 
