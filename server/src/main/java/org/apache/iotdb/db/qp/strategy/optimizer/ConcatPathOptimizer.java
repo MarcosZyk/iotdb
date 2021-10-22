@@ -365,10 +365,6 @@ public class ConcatPathOptimizer implements ILogicalOptimizer {
       throws LogicalOptimizeException, PathNumOverLimitException {
     int offset = operator.getSeriesOffset();
     int limit = operator.getSeriesLimit() == 0 ? Integer.MAX_VALUE : operator.getSeriesLimit();
-    if (operator.isGroupByLevel()) {
-      limit = Integer.MAX_VALUE;
-      offset = 0;
-    }
     int consumed = 0;
 
     List<PartialPath> newSuffixPathList = new ArrayList<>();
