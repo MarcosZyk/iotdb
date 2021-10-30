@@ -20,6 +20,7 @@ package org.apache.iotdb.db.query.control;
 
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.query.dataset.UDTFDataSet;
+import org.apache.iotdb.db.service.TSServiceImpl;
 import org.apache.iotdb.tsfile.read.query.dataset.QueryDataSet;
 
 import org.slf4j.Logger;
@@ -85,7 +86,7 @@ public class SessionManager {
     return sessionId;
   }
 
-  public boolean releaseSessionResource(long sessionId) {
+  public boolean releaseSessionResource(TSServiceImpl tsService, long sessionId) {
     sessionIdToZoneId.remove(sessionId);
 
     Set<Long> statementIdSet = sessionIdToStatementId.remove(sessionId);
@@ -94,7 +95,7 @@ public class SessionManager {
         Set<Long> queryIdSet = statementIdToQueryId.remove(statementId);
         if (queryIdSet != null) {
           for (Long queryId : queryIdSet) {
-            releaseQueryResourceNoExceptions(queryId);
+            tsService.releaseQueryResourceNoExceptions(queryId);
           }
         }
       }
@@ -111,11 +112,12 @@ public class SessionManager {
     return statementId;
   }
 
-  public void closeStatement(long sessionId, long statementId) {
+  public void closeStatement(TSServiceImpl tsService, long sessionId, long statementId)
+      throws StorageEngineException {
     Set<Long> queryIdSet = statementIdToQueryId.remove(statementId);
     if (queryIdSet != null) {
       for (Long queryId : queryIdSet) {
-        releaseQueryResourceNoExceptions(queryId);
+        tsService.releaseQueryResourceNoExceptions(queryId);
       }
     }
 
@@ -182,8 +184,8 @@ public class SessionManager {
     queryIdToDataSet.remove(queryId);
   }
 
-  public void closeDataset(Long statementId, Long queryId) {
-    releaseQueryResourceNoExceptions(queryId);
+  public void closeDataset(TSServiceImpl tsService, Long statementId, Long queryId) {
+    tsService.releaseQueryResourceNoExceptions(queryId);
     if (statementIdToQueryId.containsKey(statementId)) {
       statementIdToQueryId.get(statementId).remove(queryId);
     }
