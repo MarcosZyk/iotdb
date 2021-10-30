@@ -503,24 +503,6 @@ public class LevelCompactionTsFileManagement extends TsFileManagement {
     }
   }
 
-  private void deleteAllSubLevelFiles(boolean isSeq, long timePartition) {
-    if (isSeq) {
-      for (int level = 0; level < sequenceTsFileResources.get(timePartition).size(); level++) {
-        SortedSet<TsFileResource> currLevelMergeFile =
-            sequenceTsFileResources.get(timePartition).get(level);
-        deleteLevelFilesInDisk(currLevelMergeFile);
-        deleteLevelFilesInList(timePartition, currLevelMergeFile, level, isSeq);
-      }
-    } else {
-      for (int level = 0; level < unSequenceTsFileResources.get(timePartition).size(); level++) {
-        SortedSet<TsFileResource> currLevelMergeFile =
-            sequenceTsFileResources.get(timePartition).get(level);
-        deleteLevelFilesInDisk(currLevelMergeFile);
-        deleteLevelFilesInList(timePartition, currLevelMergeFile, level, isSeq);
-      }
-    }
-  }
-
   @Override
   public void forkCurrentFileList(long timePartition) {
     readLock();
@@ -542,9 +524,15 @@ public class LevelCompactionTsFileManagement extends TsFileManagement {
 
   private void forkTsFileList(
       List<List<TsFileResource>> forkedTsFileResources, List rawTsFileResources, int currMaxLevel) {
-    forkedTsFileResources.clear();
     for (int i = 0; i < currMaxLevel - 1; i++) {
-      List<TsFileResource> forkedLevelTsFileResources = new ArrayList<>();
+      List<TsFileResource> forkedLevelTsFileResources;
+      if (forkedTsFileResources.size() > i) {
+        forkedLevelTsFileResources = forkedTsFileResources.get(i);
+        forkedLevelTsFileResources.clear();
+      } else {
+        forkedLevelTsFileResources = new ArrayList<>();
+        forkedTsFileResources.add(forkedLevelTsFileResources);
+      }
       Collection<TsFileResource> levelRawTsFileResources =
           (Collection<TsFileResource>) rawTsFileResources.get(i);
       for (TsFileResource tsFileResource : levelRawTsFileResources) {
@@ -552,7 +540,6 @@ public class LevelCompactionTsFileManagement extends TsFileManagement {
           forkedLevelTsFileResources.add(tsFileResource);
         }
       }
-      forkedTsFileResources.add(forkedLevelTsFileResources);
     }
   }
 
