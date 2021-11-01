@@ -506,9 +506,11 @@ public abstract class AbstractCli {
           List<Integer> maxSizeList = new ArrayList<>(columnLength);
           List<List<String>> lists =
               cacheResult(resultSet, maxSizeList, columnLength, resultSetMetaData, zoneId);
-          output(lists, maxSizeList);
           long costTime = System.currentTimeMillis() - startTime;
-          println(String.format("It costs %.3fs", costTime / 1000.0));
+          output(lists, maxSizeList);
+          println(String.format("Query costs %.3fs", costTime / 1000.0));
+          costTime = System.currentTimeMillis() - startTime;
+          println(String.format("It costs %.3fs totally", costTime / 1000.0));
           while (!isReachEnd) {
             if (continuePrint) {
               maxSizeList = new ArrayList<>(columnLength);

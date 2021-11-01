@@ -815,6 +815,7 @@ public class TSServiceImpl implements TSIService.Iface {
       if (!(plan instanceof ShowQueryProcesslistPlan)) {
         queryTimeManager.unRegisterQuery(queryId);
       }
+      System.out.printf("\"%s\" costs %dms%n", statement, System.currentTimeMillis() - startTime);
       return resp;
     } catch (Exception e) {
       releaseQueryResourceNoExceptions(queryId);
