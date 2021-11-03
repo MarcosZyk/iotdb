@@ -178,7 +178,6 @@ public class ClusterLastQueryExecutor extends LastQueryExecutor {
         PartitionGroup group, List<PartialPath> seriesPaths, QueryContext context)
         throws QueryProcessException, StorageEngineException, IOException {
       if (group.contains(metaGroupMember.getThisNode())) {
-        ClusterQueryUtils.checkPathExistence(seriesPaths);
         return calculateSeriesLastLocally(group, seriesPaths, context);
       } else {
         return calculateSeriesLastRemotely(group, seriesPaths, context);

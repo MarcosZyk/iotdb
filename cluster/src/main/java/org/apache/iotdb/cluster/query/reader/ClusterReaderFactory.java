@@ -515,7 +515,6 @@ public class ClusterReaderFactory {
       Node header,
       boolean ascending)
       throws StorageEngineException, QueryProcessException {
-    ClusterQueryUtils.checkPathExistence(path);
     List<Integer> nodeSlots =
         ((SlotPartitionTable) metaGroupMember.getPartitionTable()).getNodeSlots(header);
     QueryDataSource queryDataSource =

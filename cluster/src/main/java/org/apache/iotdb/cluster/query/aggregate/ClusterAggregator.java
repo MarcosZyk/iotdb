@@ -82,12 +82,6 @@ public class ClusterAggregator {
       QueryContext context,
       boolean ascending)
       throws StorageEngineException {
-    // make sure the partition table is new
-    try {
-      metaGroupMember.syncLeaderWithConsistencyCheck(false);
-    } catch (CheckConsistencyException e) {
-      throw new StorageEngineException(e);
-    }
     // find groups to be queried using timeFilter and path
     List<PartitionGroup> partitionGroups;
     try {

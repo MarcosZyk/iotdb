@@ -36,6 +36,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @SuppressWarnings("squid:S106")
 public class SessionExample {
@@ -52,54 +54,17 @@ public class SessionExample {
 
   public static void main(String[] args)
       throws IoTDBConnectionException, StatementExecutionException {
-    session = new Session(LOCAL_HOST, 6667, "root", "root");
-    session.open(false);
+    int threadNum = 20;
+    ExecutorService service = Executors.newFixedThreadPool(threadNum);
 
-    // set session fetchSize
-    session.setFetchSize(10000);
-
-    try {
-      session.setStorageGroup("root.sg1");
-      session.setStorageGroup("root.sg2");
-      session.setStorageGroup("root.sg24324");
-      session.setStorageGroup("root.sg2424");
-      session.setStorageGroup("root.sg3213");
-    } catch (StatementExecutionException e) {
-      if (e.getStatusCode() != TSStatusCode.PATH_ALREADY_EXIST_ERROR.getStatusCode()) {
-        throw e;
-      }
+    for (int i = 0; i < threadNum; i++) {
+      service.submit(SessionExample::query);
     }
-
-    System.out.println(session.getStorageGroupDistribution());
-
-    // createTemplate();
-    createTimeseries();
-    createMultiTimeseries();
-    insertRecord();
-    insertTablet();
-    insertTablets();
-    insertRecords();
-    nonQuery();
-    query();
-    queryWithTimeout();
-    rawDataQuery();
-    queryByIterator();
-    deleteData();
-    deleteTimeseries();
-    setTimeout();
-
-    sessionEnableRedirect = new Session(LOCAL_HOST, 6667, "root", "root");
-    sessionEnableRedirect.setEnableQueryRedirection(true);
-    sessionEnableRedirect.open(false);
-
-    // set session fetchSize
-    sessionEnableRedirect.setFetchSize(10000);
-
-    insertRecord4Redirect();
-    query4Redirect();
-    sessionEnableRedirect.close();
-    session.close();
   }
+
+
+
+
 
   private static void createTimeseries()
       throws IoTDBConnectionException, StatementExecutionException {
@@ -516,15 +481,28 @@ public class SessionExample {
     session.deleteTimeseries(paths);
   }
 
-  private static void query() throws IoTDBConnectionException, StatementExecutionException {
-    SessionDataSet dataSet = session.executeQueryStatement("select * from root.sg1.d1");
-    System.out.println(dataSet.getColumnNames());
-    dataSet.setFetchSize(1024); // default is 10000
-    while (dataSet.hasNext()) {
-      System.out.println(dataSet.next());
+  private static void query() {
+    try {
+      Session session = new Session("172.20.70.51", 6667, "root", "root");
+      session.open(false);
+      long totalTime = 0;
+      int executeNum = 50;
+      for (int i = 0; i < executeNum; i++) {
+        long startTime = System.currentTimeMillis();
+        SessionDataSet dataSet = session.executeQueryStatement("select count(*) from root where time > now()-10h and time < now()-4h slimit 2000");
+        dataSet.setFetchSize(1024); // default is 10000
+        while (dataSet.hasNext()) {
+          dataSet.next();
+        }
+        long endTime = System.currentTimeMillis();
+        totalTime += endTime - startTime;
+        dataSet.closeOperationHandle();
+      }
+      System.out.println("Avg Cost: " + totalTime / executeNum);
+      session.close();
+    } catch (Exception e) {
+      System.out.println("出错啦" + e.getMessage());
     }
-
-    dataSet.closeOperationHandle();
   }
 
   private static void query4Redirect()
