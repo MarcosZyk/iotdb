@@ -23,7 +23,6 @@ import org.apache.iotdb.cluster.client.async.AsyncDataClient;
 import org.apache.iotdb.cluster.client.sync.SyncClientAdaptor;
 import org.apache.iotdb.cluster.client.sync.SyncDataClient;
 import org.apache.iotdb.cluster.config.ClusterDescriptor;
-import org.apache.iotdb.cluster.exception.CheckConsistencyException;
 import org.apache.iotdb.cluster.exception.EmptyIntervalException;
 import org.apache.iotdb.cluster.exception.RequestTimeOutException;
 import org.apache.iotdb.cluster.partition.PartitionGroup;
@@ -82,12 +81,6 @@ public class ClusterAggregator {
       QueryContext context,
       boolean ascending)
       throws StorageEngineException {
-    // make sure the partition table is new
-    try {
-      metaGroupMember.syncLeaderWithConsistencyCheck(false);
-    } catch (CheckConsistencyException e) {
-      throw new StorageEngineException(e);
-    }
     // find groups to be queried using timeFilter and path
     List<PartitionGroup> partitionGroups;
     try {

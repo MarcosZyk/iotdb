@@ -1265,9 +1265,6 @@ public class MTree implements IMTree {
       }
     } else {
       for (IMNode child : node.getChildren().values()) {
-        if (!Pattern.matches(nodeReg.replace("*", ".*"), child.getName())) {
-          continue;
-        }
         findPath(
             child,
             nodes,

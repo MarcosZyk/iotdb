@@ -23,7 +23,6 @@ import org.apache.iotdb.cluster.client.async.AsyncDataClient;
 import org.apache.iotdb.cluster.client.sync.SyncClientAdaptor;
 import org.apache.iotdb.cluster.client.sync.SyncDataClient;
 import org.apache.iotdb.cluster.config.ClusterDescriptor;
-import org.apache.iotdb.cluster.exception.CheckConsistencyException;
 import org.apache.iotdb.cluster.exception.QueryTimeOutException;
 import org.apache.iotdb.cluster.partition.PartitionGroup;
 import org.apache.iotdb.cluster.rpc.thrift.Node;
@@ -101,12 +100,6 @@ public class ClusterPreviousFill extends PreviousFill {
       Set<String> deviceMeasurements,
       QueryContext context)
       throws StorageEngineException {
-    // make sure the partition table is new
-    try {
-      metaGroupMember.syncLeaderWithConsistencyCheck(false);
-    } catch (CheckConsistencyException e) {
-      throw new StorageEngineException(e);
-    }
     // find the groups that should be queried using the time range
     Intervals intervals = new Intervals();
     long lowerBound = beforeRange == -1 ? Long.MIN_VALUE : queryTime - beforeRange;

@@ -96,22 +96,18 @@ public class ClusterPlanExecutor extends PlanExecutor {
   public QueryDataSet processQuery(PhysicalPlan queryPlan, QueryContext context)
       throws IOException, StorageEngineException, QueryFilterOptimizationException,
           QueryProcessException, MetadataException, InterruptedException {
+    // make sure the partition table is new
+    try {
+      metaGroupMember.syncLeaderWithConsistencyCheck(false);
+    } catch (CheckConsistencyException e) {
+      throw new StorageEngineException(e);
+    }
     if (queryPlan instanceof QueryPlan) {
       logger.debug("Executing a query: {}", queryPlan);
       return processDataQuery((QueryPlan) queryPlan, context);
     } else if (queryPlan instanceof ShowPlan) {
-      try {
-        metaGroupMember.syncLeaderWithConsistencyCheck(false);
-      } catch (CheckConsistencyException e) {
-        throw new QueryProcessException(e.getMessage());
-      }
       return processShowQuery((ShowPlan) queryPlan, context);
     } else if (queryPlan instanceof AuthorPlan) {
-      try {
-        metaGroupMember.syncLeaderWithConsistencyCheck(false);
-      } catch (CheckConsistencyException e) {
-        throw new QueryProcessException(e.getMessage());
-      }
       return processAuthorQuery((AuthorPlan) queryPlan);
     } else {
       throw new QueryProcessException(String.format("Unrecognized query plan %s", queryPlan));

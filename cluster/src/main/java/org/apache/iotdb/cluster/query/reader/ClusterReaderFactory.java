@@ -46,7 +46,6 @@ import org.apache.iotdb.cluster.rpc.thrift.SingleSeriesQueryRequest;
 import org.apache.iotdb.cluster.server.RaftServer;
 import org.apache.iotdb.cluster.server.member.DataGroupMember;
 import org.apache.iotdb.cluster.server.member.MetaGroupMember;
-import org.apache.iotdb.cluster.utils.ClusterQueryUtils;
 import org.apache.iotdb.db.engine.querycontext.QueryDataSource;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
@@ -515,7 +514,6 @@ public class ClusterReaderFactory {
       Node header,
       boolean ascending)
       throws StorageEngineException, QueryProcessException {
-    ClusterQueryUtils.checkPathExistence(path);
     List<Integer> nodeSlots =
         ((SlotPartitionTable) metaGroupMember.getPartitionTable()).getNodeSlots(header);
     QueryDataSource queryDataSource =
@@ -728,12 +726,6 @@ public class ClusterReaderFactory {
       List<Integer> aggregationTypes,
       boolean ascending)
       throws StorageEngineException, QueryProcessException {
-    // make sure the partition table is new
-    try {
-      metaGroupMember.syncLeaderWithConsistencyCheck(false);
-    } catch (CheckConsistencyException e) {
-      throw new QueryProcessException(e.getMessage());
-    }
     // find out the groups that should be queried
     List<PartitionGroup> partitionGroups;
     try {

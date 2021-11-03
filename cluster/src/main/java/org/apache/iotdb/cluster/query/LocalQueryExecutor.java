@@ -37,7 +37,6 @@ import org.apache.iotdb.cluster.rpc.thrift.PullSchemaRequest;
 import org.apache.iotdb.cluster.rpc.thrift.PullSchemaResp;
 import org.apache.iotdb.cluster.rpc.thrift.SingleSeriesQueryRequest;
 import org.apache.iotdb.cluster.server.member.DataGroupMember;
-import org.apache.iotdb.cluster.utils.ClusterQueryUtils;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
@@ -625,7 +624,6 @@ public class LocalQueryExecutor {
       throw new QueryProcessException(e.getMessage());
     }
 
-    ClusterQueryUtils.checkPathExistence(path);
     List<AggregateResult> results = new ArrayList<>();
     for (String aggregation : aggregations) {
       results.add(AggregateResultFactory.getAggrResultByName(aggregation, dataType, ascending));
@@ -713,7 +711,6 @@ public class LocalQueryExecutor {
       throw new StorageEngineException(e);
     }
 
-    ClusterQueryUtils.checkPathExistence(path);
     List<Integer> nodeSlots =
         ((SlotPartitionTable) dataGroupMember.getMetaGroupMember().getPartitionTable())
             .getNodeSlots(dataGroupMember.getHeader());
@@ -916,7 +913,6 @@ public class LocalQueryExecutor {
     for (Integer dataTypeOrdinal : request.dataTypeOrdinals) {
       dataTypes.add(TSDataType.values()[dataTypeOrdinal]);
     }
-    ClusterQueryUtils.checkPathExistence(partialPaths);
     IExpression expression = null;
     if (request.isSetFilterBytes()) {
       Filter filter = FilterFactory.deserialize(request.filterBytes);

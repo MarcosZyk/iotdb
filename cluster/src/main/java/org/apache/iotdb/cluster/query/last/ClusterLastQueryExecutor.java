@@ -30,7 +30,6 @@ import org.apache.iotdb.cluster.rpc.thrift.Node;
 import org.apache.iotdb.cluster.server.RaftServer;
 import org.apache.iotdb.cluster.server.member.DataGroupMember;
 import org.apache.iotdb.cluster.server.member.MetaGroupMember;
-import org.apache.iotdb.cluster.utils.ClusterQueryUtils;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.metadata.PartialPath;
@@ -91,12 +90,6 @@ public class ClusterLastQueryExecutor extends LastQueryExecutor {
       IExpression expression,
       RawDataQueryPlan lastQueryPlan)
       throws IOException, QueryProcessException {
-    // calculate the global last from all data groups
-    try {
-      metaGroupMember.syncLeaderWithConsistencyCheck(false);
-    } catch (CheckConsistencyException e) {
-      throw new IOException(e);
-    }
     List<Pair<Boolean, TimeValuePair>> results = new ArrayList<>(seriesPaths.size());
     for (int i = 0; i < seriesPaths.size(); i++) {
       results.add(new Pair<>(true, new TimeValuePair(Long.MIN_VALUE, null)));
@@ -178,7 +171,6 @@ public class ClusterLastQueryExecutor extends LastQueryExecutor {
         PartitionGroup group, List<PartialPath> seriesPaths, QueryContext context)
         throws QueryProcessException, StorageEngineException, IOException {
       if (group.contains(metaGroupMember.getThisNode())) {
-        ClusterQueryUtils.checkPathExistence(seriesPaths);
         return calculateSeriesLastLocally(group, seriesPaths, context);
       } else {
         return calculateSeriesLastRemotely(group, seriesPaths, context);
