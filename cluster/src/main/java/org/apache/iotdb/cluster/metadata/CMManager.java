@@ -188,22 +188,22 @@ public class CMManager extends MManager {
 
   @Override
   public TSDataType getSeriesType(PartialPath path) throws MetadataException {
-    // try remote cache first
-    try {
-      cacheLock.readLock().lock();
-      MeasurementMNode measurementMNode = mRemoteMetaCache.get(path);
-      if (measurementMNode != null) {
-        return measurementMNode.getSchema().getType();
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-
     // try local MTree
     TSDataType seriesType;
     try {
       seriesType = super.getSeriesType(path);
     } catch (PathNotExistException e) {
+      // try remote cache first
+      try {
+        cacheLock.readLock().lock();
+        MeasurementMNode measurementMNode = mRemoteMetaCache.get(path);
+        if (measurementMNode != null) {
+          return measurementMNode.getSchema().getType();
+        }
+      } finally {
+        cacheLock.readLock().unlock();
+      }
+
       // pull from remote node
       List<MeasurementSchema> schemas =
           metaPuller.pullMeasurementSchemas(Collections.singletonList(path));
