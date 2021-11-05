@@ -151,6 +151,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.iotdb.db.utils.SchemaUtils.getAggregationType;
+
 /** Thrift RPC implementation at server side. */
 public class TSServiceImpl implements TSIService.Iface {
 
@@ -888,7 +890,8 @@ public class TSServiceImpl implements TSIService.Iface {
     switch (plan.getOperatorType()) {
       case QUERY:
       case FILL:
-        for (PartialPath path : paths) {
+        for (int i = 0; i < paths.size(); i++) {
+          PartialPath path = paths.get(i);
           String column;
           if (path.isTsAliasExists()) {
             column = path.getTsAlias();
@@ -897,7 +900,7 @@ public class TSServiceImpl implements TSIService.Iface {
                 path.isMeasurementAliasExists() ? path.getFullPathWithAlias() : path.getFullPath();
           }
           respColumns.add(column);
-          seriesTypes.add(getSeriesTypeByPath(path));
+          seriesTypes.add(plan.getDataTypes().get(i));
         }
         break;
       case AGGREGATION:
@@ -922,7 +925,16 @@ public class TSServiceImpl implements TSIService.Iface {
           }
           respColumns.add(column);
         }
-        seriesTypes = getSeriesTypesByPaths(paths, aggregations);
+        for (int i = 0; i < paths.size(); i++) {
+          String aggrStr = aggregations.get(i);
+          TSDataType dataType = getAggregationType(aggrStr);
+          if (dataType != null) {
+            seriesTypes.add(dataType);
+          } else {
+            PartialPath path = paths.get(i);
+            seriesTypes.add(path == null ? null : plan.getDataTypes().get(i));
+          }
+        }
         break;
       case UDTF:
         seriesTypes = new ArrayList<>();

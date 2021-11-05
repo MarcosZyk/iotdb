@@ -24,7 +24,6 @@ import org.apache.iotdb.db.engine.querycontext.QueryDataSource;
 import org.apache.iotdb.db.engine.storagegroup.TsFileResource;
 import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.query.context.QueryContext;
-import org.apache.iotdb.db.query.control.QueryTimeManager;
 import org.apache.iotdb.db.query.control.TracingManager;
 import org.apache.iotdb.db.query.filter.TsFileFilter;
 import org.apache.iotdb.db.query.reader.universal.DescPriorityMergeReader;
@@ -202,7 +201,6 @@ public class SeriesReader {
   }
 
   boolean hasNextFile() throws IOException {
-    QueryTimeManager.checkQueryAlive(context.getQueryId());
 
     if (!unSeqPageReaders.isEmpty()
         || firstPageReader != null
@@ -263,7 +261,6 @@ public class SeriesReader {
    * overlapped chunks are consumed
    */
   boolean hasNextChunk() throws IOException {
-    QueryTimeManager.checkQueryAlive(context.getQueryId());
 
     if (!unSeqPageReaders.isEmpty()
         || firstPageReader != null
@@ -387,7 +384,6 @@ public class SeriesReader {
   @SuppressWarnings("squid:S3776")
   // Suppress high Cognitive Complexity warning
   boolean hasNextPage() throws IOException {
-    QueryTimeManager.checkQueryAlive(context.getQueryId());
 
     /*
      * has overlapped data before

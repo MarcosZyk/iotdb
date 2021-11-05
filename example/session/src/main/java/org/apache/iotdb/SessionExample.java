@@ -53,7 +53,7 @@ public class SessionExample {
 
   public static void main(String[] args)
       throws IoTDBConnectionException, StatementExecutionException {
-    int threadNum = 20;
+    int threadNum = 1;
     ExecutorService service = Executors.newFixedThreadPool(threadNum);
 
     for (int i = 0; i < threadNum; i++) {
@@ -481,13 +481,12 @@ public class SessionExample {
       Session session = new Session("172.20.70.51", 6667, "root", "root");
       session.open(false);
       long totalTime = 0;
-      int executeNum = 10;
+      int executeNum = 20;
       for (int i = 0; i < executeNum; i++) {
         long startTime = System.currentTimeMillis();
         SessionDataSet dataSet =
             session.executeQueryStatement(
-                "select count(*) from root where time > now()-10h and time < now()-4h slimit 2000");
-        dataSet.setFetchSize(1024); // default is 10000
+                "select avg(*) from root group by ([now() - 60h, now() - 59h), 60s) slimit 30000");
         while (dataSet.hasNext()) {
           dataSet.next();
         }

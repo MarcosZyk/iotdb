@@ -27,6 +27,7 @@ import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.query.aggregation.AggregateResult;
 import org.apache.iotdb.db.query.context.QueryContext;
+import org.apache.iotdb.db.query.control.QueryResourceManager;
 import org.apache.iotdb.db.query.factory.AggregateResultFactory;
 import org.apache.iotdb.db.query.filter.TsFileFilter;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -47,6 +48,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
@@ -137,19 +140,23 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
 
     AggregateResult[] fields = new AggregateResult[paths.size()];
 
-    try {
-      for (Entry<PartialPath, GroupByExecutor> pathToExecutorEntry : pathExecutors.entrySet()) {
-        GroupByExecutor executor = pathToExecutorEntry.getValue();
-        List<AggregateResult> aggregations = executor.calcResult(curStartTime, curEndTime);
-        for (int i = 0; i < aggregations.size(); i++) {
-          int resultIndex = resultIndexes.get(pathToExecutorEntry.getKey()).get(i);
-          fields[resultIndex] = aggregations.get(i);
-        }
-      }
-    } catch (QueryProcessException e) {
-      logger.error("GroupByWithoutValueFilterDataSet execute has error", e);
-      throw new IOException(e.getMessage(), e);
+    List<Future<Void>> futureList = new ArrayList<>();
+
+    for (Entry<PartialPath, GroupByExecutor> pathToExecutorEntry : pathExecutors.entrySet()) {
+      futureList.add(
+          QueryResourceManager.getInstance()
+              .service
+              .submit(
+                  () -> {
+                    try {
+                      getGroupByResult(pathToExecutorEntry, fields);
+                    } catch (QueryProcessException | IOException e) {
+                      logger.error("GroupByWithoutValueFilterDataSet execute has error", e);
+                    }
+                    return null;
+                  }));
     }
+    waitForThreadPool(futureList, "getGroupByResult");
 
     for (AggregateResult res : fields) {
       if (res == null) {
@@ -159,6 +166,31 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
       record.addField(res.getResult(), res.getResultDataType());
     }
     return record;
+  }
+
+  public static void waitForThreadPool(List<Future<Void>> futures, String methodName)
+      throws IOException {
+    for (Future<Void> future : futures) {
+      try {
+        future.get();
+      } catch (InterruptedException e) {
+        logger.error("Unexpected interruption when waiting for {}", methodName, e);
+        Thread.currentThread().interrupt();
+      } catch (RuntimeException | ExecutionException e) {
+        throw new IOException(e);
+      }
+    }
+  }
+
+  private void getGroupByResult(
+      Entry<PartialPath, GroupByExecutor> pathToExecutorEntry, AggregateResult[] fields)
+      throws QueryProcessException, IOException {
+    GroupByExecutor executor = pathToExecutorEntry.getValue();
+    List<AggregateResult> aggregations = executor.calcResult(curStartTime, curEndTime);
+    for (int i = 0; i < aggregations.size(); i++) {
+      int resultIndex = resultIndexes.get(pathToExecutorEntry.getKey()).get(i);
+      fields[resultIndex] = aggregations.get(i);
+    }
   }
 
   @Override

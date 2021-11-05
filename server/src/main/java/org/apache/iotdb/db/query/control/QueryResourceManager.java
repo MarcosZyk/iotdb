@@ -41,6 +41,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -55,6 +57,8 @@ public class QueryResourceManager {
   private final QueryFileManager filePathsManager;
   private static final Logger logger = LoggerFactory.getLogger(QueryResourceManager.class);
   private IoTDBConfig CONFIG = IoTDBDescriptor.getInstance().getConfig();
+  public ExecutorService service =
+      Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
   /**
    * Record temporary files used for external sorting.
