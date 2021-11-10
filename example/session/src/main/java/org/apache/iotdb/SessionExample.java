@@ -20,7 +20,6 @@ package org.apache.iotdb;
 
 import org.apache.iotdb.rpc.IoTDBConnectionException;
 import org.apache.iotdb.rpc.StatementExecutionException;
-import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.session.Session;
 import org.apache.iotdb.session.SessionDataSet;
 import org.apache.iotdb.session.SessionDataSet.DataIterator;
@@ -61,10 +60,6 @@ public class SessionExample {
       service.submit(SessionExample::query);
     }
   }
-
-
-
-
 
   private static void createTimeseries()
       throws IoTDBConnectionException, StatementExecutionException {
@@ -489,7 +484,9 @@ public class SessionExample {
       int executeNum = 50;
       for (int i = 0; i < executeNum; i++) {
         long startTime = System.currentTimeMillis();
-        SessionDataSet dataSet = session.executeQueryStatement("select count(*) from root where time > now()-10h and time < now()-4h slimit 2000");
+        SessionDataSet dataSet =
+            session.executeQueryStatement(
+                "select count(*) from root where time > now()-10h and time < now()-4h slimit 2000");
         dataSet.setFetchSize(1024); // default is 10000
         while (dataSet.hasNext()) {
           dataSet.next();
