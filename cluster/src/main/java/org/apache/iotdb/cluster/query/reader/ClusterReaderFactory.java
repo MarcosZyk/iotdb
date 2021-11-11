@@ -789,6 +789,7 @@ public class ClusterReaderFactory {
       return localQueryExecutor.getGroupByExecutor(
           path, deviceMeasurements, dataType, timeFilter, aggregationTypes, context, ascending);
     } else {
+      logger.info("创建了一个远程 reader");
       return getRemoteGroupByExecutor(
           timeFilter,
           aggregationTypes,

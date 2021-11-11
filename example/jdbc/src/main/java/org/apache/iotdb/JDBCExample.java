@@ -32,11 +32,11 @@ public class JDBCExample {
   public static void main(String[] args) throws ClassNotFoundException, SQLException {
     Class.forName("org.apache.iotdb.jdbc.IoTDBDriver");
     try {
-      int threadNum = 1;
+      int threadNum = 50;
       ExecutorService service = Executors.newFixedThreadPool(threadNum);
 
       String sql =
-          "select count(*) from root.*.muooryhednieihefozlktytyqshsfqtc group by ([now()-3h, now()-2h), 1m), level=2";
+          "select count(*) from root.*.muooryhednieihefozlktytyqshsfqtc group by ([now()-12h, now()-11h), 1m), level=2";
       for (int i = 0; i < threadNum; i++) {
         service.submit(() -> query(sql));
       }

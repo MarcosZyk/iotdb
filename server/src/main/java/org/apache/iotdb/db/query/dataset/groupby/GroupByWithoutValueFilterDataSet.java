@@ -27,7 +27,6 @@ import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.query.aggregation.AggregateResult;
 import org.apache.iotdb.db.query.context.QueryContext;
-import org.apache.iotdb.db.query.control.QueryResourceManager;
 import org.apache.iotdb.db.query.factory.AggregateResultFactory;
 import org.apache.iotdb.db.query.filter.TsFileFilter;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -140,24 +139,14 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
 
     AggregateResult[] fields = new AggregateResult[paths.size()];
 
-    List<Future<Void>> futureList = new ArrayList<>();
-
     long startTime = System.currentTimeMillis();
     for (Entry<PartialPath, GroupByExecutor> pathToExecutorEntry : pathExecutors.entrySet()) {
-      futureList.add(
-          QueryResourceManager.getInstance()
-              .service
-              .submit(
-                  () -> {
-                    try {
-                      getGroupByResult(pathToExecutorEntry, fields);
-                    } catch (QueryProcessException | IOException e) {
-                      logger.error("GroupByWithoutValueFilterDataSet execute has error", e);
-                    }
-                    return null;
-                  }));
+      try {
+        getGroupByResult(pathToExecutorEntry, fields);
+      } catch (QueryProcessException | IOException e) {
+        logger.error("GroupByWithoutValueFilterDataSet execute has error", e);
+      }
     }
-    waitForThreadPool(futureList, "getGroupByResult");
 
     logger.info("Get one result costs: {}", System.currentTimeMillis() - startTime);
 
