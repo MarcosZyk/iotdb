@@ -81,6 +81,7 @@ public class ClusterPlanner extends Planner {
         String storageGroup = temp.getKey();
         PartitionGroup partitionGroup = metaGroupMember.getPartitionTable().route(storageGroup, 0);
         if (partitionGroup.contains(metaGroupMember.getThisNode())) {
+          // local node
           try {
             ((QueryOperator) operator)
                 .getFromOperator()
@@ -94,7 +95,6 @@ public class ClusterPlanner extends Planner {
       }
 
       // execute sub query operator remotely
-      // TODO: 内存控制
       coordinator.forwardQuerySQL(subQueryOperatorMap, req.getSessionId(), req.getStatementId());
     }
 

@@ -139,7 +139,6 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
 
     AggregateResult[] fields = new AggregateResult[paths.size()];
 
-    long startTime = System.currentTimeMillis();
     for (Entry<PartialPath, GroupByExecutor> pathToExecutorEntry : pathExecutors.entrySet()) {
       try {
         getGroupByResult(pathToExecutorEntry, fields);
@@ -147,8 +146,6 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
         logger.error("GroupByWithoutValueFilterDataSet execute has error", e);
       }
     }
-
-    logger.info("Get one result costs: {}", System.currentTimeMillis() - startTime);
 
     for (AggregateResult res : fields) {
       if (res == null) {
