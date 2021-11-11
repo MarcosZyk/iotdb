@@ -52,13 +52,17 @@ import org.apache.iotdb.db.qp.physical.crud.SetDeviceTemplatePlan;
 import org.apache.iotdb.db.qp.physical.sys.CreateMultiTimeSeriesPlan;
 import org.apache.iotdb.db.qp.physical.sys.CreateTimeSeriesPlan;
 import org.apache.iotdb.db.qp.physical.sys.DeleteTimeSeriesPlan;
+import org.apache.iotdb.db.query.control.ExecuteQueryHandler;
+import org.apache.iotdb.db.query.control.QueryResourceManager;
 import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.service.rpc.thrift.EndPoint;
 import org.apache.iotdb.service.rpc.thrift.StorageGroupDistributionRes;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 
+import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -748,5 +752,39 @@ public class Coordinator {
    */
   public SyncDataClient getSyncDataClient(Node node, int timeout) throws IOException {
     return metaGroupMember.getClientProvider().getSyncDataClient(node, timeout);
+  }
+
+  public void forwardQuerySQL(
+      Map<PartitionGroup, String> subQueryOperatorMap, long sessionId, long statementId) {
+    for (Map.Entry<PartitionGroup, String> subQuery : subQueryOperatorMap.entrySet()) {
+      PartitionGroup partitionGroup = subQuery.getKey();
+      for (Node node : partitionGroup) {
+        ExecuteQueryHandler handler = new ExecuteQueryHandler();
+        handler.setStatementId(statementId);
+        try {
+          // only data plans are partitioned, so it must be processed by its data server instead of
+          // meta server
+          RaftService.AsyncClient client =
+              metaGroupMember
+                  .getClientProvider()
+                  .getAsyncDataClient(node, RaftServer.getReadOperationTimeoutMS());
+
+          TSExecuteStatementReq executeQueryReq = new TSExecuteStatementReq();
+          executeQueryReq.setStatement(subQuery.getValue());
+          executeQueryReq.setStatementId(statementId);
+          executeQueryReq.setSessionId(sessionId);
+
+          try {
+            client.executeQueryStatement(executeQueryReq, handler);
+          } catch (TException e) {
+            e.printStackTrace();
+          }
+
+          QueryResourceManager.getInstance().addStatementToHandlerMap(statementId, handler);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+    }
   }
 }

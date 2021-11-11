@@ -46,6 +46,8 @@ import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.service.IoTDB;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -74,6 +76,12 @@ public class DataSyncService extends BaseSyncService implements TSDataService.If
     } catch (Exception e) {
       throw new TException(e);
     }
+  }
+
+  @Override
+  public TSExecuteStatementResp executeQueryStatement(TSExecuteStatementReq request)
+      throws TException {
+    return null;
   }
 
   @Override

@@ -177,6 +177,9 @@ public class IoTDBRpcDataSet {
   }
 
   public void close() throws StatementExecutionException, TException {
+    if (statementId == 0) {
+      return;
+    }
     if (isClosed) {
       return;
     }
@@ -217,7 +220,9 @@ public class IoTDBRpcDataSet {
       return true;
     } else {
       try {
-        close();
+        if (statementId != 0) {
+          close();
+        }
         return false;
       } catch (TException e) {
         throw new IoTDBConnectionException(
@@ -227,6 +232,9 @@ public class IoTDBRpcDataSet {
   }
 
   public boolean fetchResults() throws StatementExecutionException, IoTDBConnectionException {
+    if (statementId == 0) {
+      return false;
+    }
     rowsIndex = 0;
     TSFetchResultsReq req = new TSFetchResultsReq(sessionId, sql, fetchSize, queryId, true);
     req.setTimeout(timeout);

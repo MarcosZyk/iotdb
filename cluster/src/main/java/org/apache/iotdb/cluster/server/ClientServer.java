@@ -47,6 +47,8 @@ import org.apache.iotdb.rpc.RpcTransportFactory;
 import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.service.rpc.thrift.StorageGroupDistributionRes;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 import org.apache.iotdb.service.rpc.thrift.TSIService.Processor;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -69,6 +71,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -118,9 +121,12 @@ public class ClientServer extends TSServiceImpl {
    */
   private Map<Long, RemoteQueryContext> queryContextMap = new ConcurrentHashMap<>();
 
-  public ClientServer(MetaGroupMember metaGroupMember) throws QueryProcessException {
+  public ClientServer(MetaGroupMember metaGroupMember, Coordinator coordinator)
+      throws QueryProcessException {
     super();
     this.processor = new ClusterPlanner();
+    ((ClusterPlanner) processor).setMetaGroupMember(metaGroupMember);
+    ((ClusterPlanner) processor).setCoordinator(coordinator);
     this.executor = new ClusterPlanExecutor(metaGroupMember);
   }
 
@@ -222,6 +228,41 @@ public class ClientServer extends TSServiceImpl {
       return RpcUtils.getStatus(TSStatusCode.EXECUTE_STATEMENT_ERROR, e.getMessage());
     }
     return coordinator.executeNonQueryPlan(plan);
+  }
+
+  public TSExecuteStatementResp executeSubQuery(TSExecuteStatementReq req) {
+    try {
+      String statement = req.getStatement();
+      long startTime = System.currentTimeMillis();
+      PhysicalPlan physicalPlan =
+          processor.parseSQLToPhysicalPlan(statement, ZoneId.of("Asia/Shanghai"), 10000);
+
+      if (physicalPlan.isQuery()) {
+        LOGGER.info("Execute sub SQL : {}", statement);
+        TSExecuteStatementResp resp =
+            internalExecuteQueryStatement(
+                statement,
+                req.statementId,
+                physicalPlan,
+                10000,
+                60000,
+                "root",
+                req.isEnableRedirectQuery());
+        releaseQueryResource(resp.getQueryId());
+        return resp;
+      } else {
+        return RpcUtils.getTSExecuteStatementResp(
+            TSStatusCode.EXECUTE_STATEMENT_ERROR, "Statement is not a query statement.");
+      }
+    } catch (InterruptedException e) {
+      LOGGER.error(INFO_INTERRUPT_ERROR, req, e);
+      Thread.currentThread().interrupt();
+      return RpcUtils.getTSExecuteStatementResp(
+          onQueryException(e, "executing executeQueryStatement"));
+    } catch (Exception e) {
+      return RpcUtils.getTSExecuteStatementResp(
+          onQueryException(e, "executing executeQueryStatement"));
+    }
   }
 
   @Override

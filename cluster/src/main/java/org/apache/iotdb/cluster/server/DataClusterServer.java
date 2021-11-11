@@ -58,6 +58,8 @@ import org.apache.iotdb.cluster.server.member.MetaGroupMember;
 import org.apache.iotdb.cluster.server.monitor.NodeReport.DataMemberReport;
 import org.apache.iotdb.cluster.server.service.DataAsyncService;
 import org.apache.iotdb.cluster.server.service.DataSyncService;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 
 import org.apache.thrift.TException;
@@ -176,27 +178,25 @@ public class DataClusterServer extends RaftServer
 
     // avoid creating two members for a header
     Exception ex = null;
-    synchronized (headerGroupMap) {
-      member = headerGroupMap.get(header);
-      if (member != null) {
-        return member;
-      }
-      logger.info("Received a request \"{}\" from unregistered header {}", request, header);
-      if (partitionTable != null) {
-        try {
-          member = createNewMember(header);
-        } catch (NotInSameGroupException | CheckConsistencyException e) {
-          ex = e;
-        }
-      } else {
-        logger.info("Partition is not ready, cannot create member");
-        ex = new PartitionTableUnavailableException(thisNode);
-      }
-      if (ex != null && resultHandler != null) {
-        resultHandler.onError(ex);
-      }
+    member = headerGroupMap.get(header);
+    if (member != null) {
       return member;
     }
+    logger.info("Received a request \"{}\" from unregistered header {}", request, header);
+    if (partitionTable != null) {
+      try {
+        member = createNewMember(header);
+      } catch (NotInSameGroupException | CheckConsistencyException e) {
+        ex = e;
+      }
+    } else {
+      logger.info("Partition is not ready, cannot create member");
+      ex = new PartitionTableUnavailableException(thisNode);
+    }
+    if (ex != null && resultHandler != null) {
+      resultHandler.onError(ex);
+    }
+    return member;
   }
 
   /**
@@ -305,6 +305,16 @@ public class DataClusterServer extends RaftServer
     DataAsyncService service = getDataAsyncService(header, resultHandler, request);
     if (service != null) {
       service.executeNonQueryPlan(request, resultHandler);
+    }
+  }
+
+  @Override
+  public void executeQueryStatement(
+      TSExecuteStatementReq request, AsyncMethodCallback<TSExecuteStatementResp> resultHandler)
+      throws TException {
+    DataAsyncService service = getDataAsyncService(thisNode, resultHandler, request);
+    if (service != null) {
+      service.executeQueryStatement(request, resultHandler);
     }
   }
 
@@ -922,6 +932,12 @@ public class DataClusterServer extends RaftServer
   @Override
   public TSStatus executeNonQueryPlan(ExecutNonQueryReq request) throws TException {
     return getDataSyncService(request.getHeader()).executeNonQueryPlan(request);
+  }
+
+  @Override
+  public TSExecuteStatementResp executeQueryStatement(TSExecuteStatementReq request)
+      throws TException {
+    return null;
   }
 
   @Override

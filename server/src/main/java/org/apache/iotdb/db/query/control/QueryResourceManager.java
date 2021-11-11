@@ -38,8 +38,10 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,6 +68,16 @@ public class QueryResourceManager {
    * <p>Key: query job id. Value: temporary file list used for external sorting.
    */
   private final Map<Long, List<IExternalSortFileDeserializer>> externalSortFileMap;
+
+  private Map<Long, Queue<ExecuteQueryHandler>> statementToHandlerMap = new ConcurrentHashMap<>();
+
+  public Map<Long, Queue<ExecuteQueryHandler>> getStatementToHandlerMap() {
+    return statementToHandlerMap;
+  }
+
+  public void addStatementToHandlerMap(long statementId, ExecuteQueryHandler handler) {
+    statementToHandlerMap.computeIfAbsent(statementId, k -> new LinkedList<>()).add(handler);
+  }
 
   private QueryResourceManager() {
     filePathsManager = new QueryFileManager();

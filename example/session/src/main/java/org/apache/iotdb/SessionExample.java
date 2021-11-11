@@ -55,9 +55,16 @@ public class SessionExample {
       throws IoTDBConnectionException, StatementExecutionException {
     int threadNum = 1;
     ExecutorService service = Executors.newFixedThreadPool(threadNum);
+    String[] sqls = {
+      "select count(*) from root.*.muooryhednieihefozlktytyqshsfqtc group by ([now()-3h, now()-2h), 1m), level=2;"
+    };
+
+    String[] hosts = {"172.20.70.51"};
 
     for (int i = 0; i < threadNum; i++) {
-      service.submit(SessionExample::query);
+      String sql = sqls[0];
+      String host = hosts[0];
+      service.submit(() -> query(sql, host));
     }
   }
 
@@ -476,17 +483,15 @@ public class SessionExample {
     session.deleteTimeseries(paths);
   }
 
-  private static void query() {
+  private static void query(String sql, String host) {
     try {
-      Session session = new Session("172.20.70.51", 6667, "root", "root");
+      Session session = new Session(host, 6667, "root", "root");
       session.open(false);
       long totalTime = 0;
-      int executeNum = 20;
+      int executeNum = 1;
       for (int i = 0; i < executeNum; i++) {
         long startTime = System.currentTimeMillis();
-        SessionDataSet dataSet =
-            session.executeQueryStatement(
-                "select avg(*) from root group by ([now() - 60h, now() - 59h), 60s) slimit 30000");
+        SessionDataSet dataSet = session.executeQueryStatement(sql);
         while (dataSet.hasNext()) {
           dataSet.next();
         }

@@ -40,6 +40,7 @@ import org.apache.iotdb.db.qp.strategy.optimizer.DnfFilterOptimizer;
 import org.apache.iotdb.db.qp.strategy.optimizer.MergeSingleFilterOptimizer;
 import org.apache.iotdb.db.qp.strategy.optimizer.RemoveNotOptimizer;
 import org.apache.iotdb.db.utils.TestOnly;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
 import org.apache.iotdb.service.rpc.thrift.TSRawDataQueryReq;
 
 import java.time.ZoneId;
@@ -70,6 +71,14 @@ public class Planner {
     operator = logicalOptimize(operator);
     PhysicalGenerator physicalGenerator = new PhysicalGenerator();
     return physicalGenerator.transformToPhysicalPlan(operator, fetchSize);
+  }
+
+  public PhysicalPlan parseSQLToPhysicalPlan(TSExecuteStatementReq req, ZoneId zoneId)
+      throws QueryProcessException {
+    Operator operator = logicalGenerator.generate(req.getStatement(), zoneId);
+    operator = logicalOptimize(operator);
+    PhysicalGenerator physicalGenerator = new PhysicalGenerator();
+    return physicalGenerator.transformToPhysicalPlan(operator, req.getFetchSize());
   }
 
   /** convert raw data query to physical plan directly */

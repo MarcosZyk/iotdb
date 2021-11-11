@@ -39,6 +39,10 @@ public class FromOperator extends Operator {
     prefixList.add(prefixPath);
   }
 
+  public void setPrefixList(List<PartialPath> prefixList) {
+    this.prefixList = prefixList;
+  }
+
   public List<PartialPath> getPrefixPaths() {
     return prefixList;
   }

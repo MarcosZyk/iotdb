@@ -142,6 +142,7 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
 
     List<Future<Void>> futureList = new ArrayList<>();
 
+    long startTime = System.currentTimeMillis();
     for (Entry<PartialPath, GroupByExecutor> pathToExecutorEntry : pathExecutors.entrySet()) {
       futureList.add(
           QueryResourceManager.getInstance()
@@ -157,6 +158,8 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
                   }));
     }
     waitForThreadPool(futureList, "getGroupByResult");
+
+    logger.info("Get one result costs: {}", System.currentTimeMillis() - startTime);
 
     for (AggregateResult res : fields) {
       if (res == null) {

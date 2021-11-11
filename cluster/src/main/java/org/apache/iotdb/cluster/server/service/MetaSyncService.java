@@ -37,6 +37,8 @@ import org.apache.iotdb.cluster.server.Response;
 import org.apache.iotdb.cluster.server.member.MetaGroupMember;
 import org.apache.iotdb.cluster.utils.ClientUtils;
 import org.apache.iotdb.cluster.utils.ClusterUtils;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -93,6 +95,12 @@ public class MetaSyncService extends BaseSyncService implements TSMetaService.If
     } catch (Exception e) {
       throw new TException(e);
     }
+  }
+
+  @Override
+  public TSExecuteStatementResp executeQueryStatement(TSExecuteStatementReq request)
+      throws TException {
+    return null;
   }
 
   @Override

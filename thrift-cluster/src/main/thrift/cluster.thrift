@@ -315,6 +315,8 @@ service RaftService {
   **/
   rpc.TSStatus executeNonQueryPlan(1:ExecutNonQueryReq request)
 
+  rpc.TSExecuteStatementResp executeQueryStatement(1:rpc.TSExecuteStatementReq request)
+
   /**
   * Ask the leader for its commit index, used to check whether the node has caught up with the
   * leader.

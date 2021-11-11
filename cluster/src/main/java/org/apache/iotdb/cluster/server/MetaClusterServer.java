@@ -50,6 +50,8 @@ import org.apache.iotdb.db.exception.StartupException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.db.service.RegisterManager;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 
 import org.apache.thrift.TException;
@@ -227,6 +229,11 @@ public class MetaClusterServer extends RaftServer
   }
 
   @Override
+  public void executeQueryStatement(
+      TSExecuteStatementReq request, AsyncMethodCallback<TSExecuteStatementResp> resultHandler)
+      throws TException {}
+
+  @Override
   public void refreshConnection(RefreshReuqest request, AsyncMethodCallback<Void> resultHandler) {
     resultHandler.onComplete(null);
   }
@@ -337,6 +344,12 @@ public class MetaClusterServer extends RaftServer
   @Override
   public TSStatus executeNonQueryPlan(ExecutNonQueryReq request) throws TException {
     return syncService.executeNonQueryPlan(request);
+  }
+
+  @Override
+  public TSExecuteStatementResp executeQueryStatement(TSExecuteStatementReq request)
+      throws TException {
+    return null;
   }
 
   @Override

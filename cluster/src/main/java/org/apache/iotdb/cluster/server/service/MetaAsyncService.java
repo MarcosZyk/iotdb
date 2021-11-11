@@ -35,6 +35,8 @@ import org.apache.iotdb.cluster.server.NodeCharacter;
 import org.apache.iotdb.cluster.server.Response;
 import org.apache.iotdb.cluster.server.member.MetaGroupMember;
 import org.apache.iotdb.cluster.utils.ClusterUtils;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.async.AsyncMethodCallback;
@@ -97,6 +99,11 @@ public class MetaAsyncService extends BaseAsyncService implements TSMetaService.
     }
     resultHandler.onComplete(null);
   }
+
+  @Override
+  public void executeQueryStatement(
+      TSExecuteStatementReq request, AsyncMethodCallback<TSExecuteStatementResp> resultHandler)
+      throws TException {}
 
   @Override
   public void checkStatus(

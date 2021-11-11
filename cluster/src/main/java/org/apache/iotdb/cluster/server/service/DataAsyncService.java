@@ -45,6 +45,8 @@ import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.service.IoTDB;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementReq;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.async.AsyncMethodCallback;
@@ -198,6 +200,18 @@ public class DataAsyncService extends BaseAsyncService implements TSDataService.
       MultSeriesQueryRequest request, AsyncMethodCallback<Long> resultHandler) throws TException {
     try {
       resultHandler.onComplete(dataGroupMember.getLocalQueryExecutor().queryMultSeries(request));
+    } catch (Exception e) {
+      resultHandler.onError(e);
+    }
+  }
+
+  @Override
+  public void executeQueryStatement(
+      TSExecuteStatementReq request, AsyncMethodCallback<TSExecuteStatementResp> resultHandler)
+      throws TException {
+    try {
+      resultHandler.onComplete(
+          dataGroupMember.getMetaGroupMember().getClientServer().executeSubQuery(request));
     } catch (Exception e) {
       resultHandler.onError(e);
     }

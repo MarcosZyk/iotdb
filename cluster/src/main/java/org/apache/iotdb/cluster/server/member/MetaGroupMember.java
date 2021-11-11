@@ -285,12 +285,16 @@ public class MetaGroupMember extends RaftMember {
     Factory dataMemberFactory = new Factory(factory, this);
     dataClusterServer = new DataClusterServer(thisNode, dataMemberFactory, this);
     dataHeartbeatServer = new DataHeartbeatServer(thisNode, dataClusterServer);
-    clientServer = new ClientServer(this);
+    clientServer = new ClientServer(this, coordinator);
     startUpStatus = getNewStartUpStatus();
 
     // try loading the partition table if there was a previous cluster
     this.coordinator = coordinator;
     loadPartitionTable();
+  }
+
+  public ClientServer getClientServer() {
+    return clientServer;
   }
 
   /**
