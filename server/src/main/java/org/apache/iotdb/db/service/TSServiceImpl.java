@@ -640,7 +640,12 @@ public class TSServiceImpl implements TSIService.Iface {
             ExecuteQueryHandler handler = iterator.next();
             if (handler.getResult() != null) {
               LOGGER.info("远端执行完毕，拿出一个 resp");
-              resp = mergeResp(resp, handler.getResult());
+              if (physicalPlan instanceof AggregationPlan
+                  && ((AggregationPlan) physicalPlan).getLevels() != null) {
+                resp = mergeResp(resp, handler.getResult());
+              } else {
+                resp = addResp(resp, handler.getResult());
+              }
               iterator.remove();
             }
           }
@@ -666,6 +671,100 @@ public class TSServiceImpl implements TSIService.Iface {
       return RpcUtils.getTSExecuteStatementResp(
           onQueryException(e, "executing \"" + statement + "\""));
     }
+  }
+
+  public TSExecuteStatementResp addResp(TSExecuteStatementResp resp1, TSExecuteStatementResp resp2)
+      throws IoTDBConnectionException, StatementExecutionException, IOException {
+    if (resp2.columns == null || resp2.columns.size() == 0) {
+      return resp1;
+    }
+
+    IoTDBRpcDataSet rpcDataSet1 =
+        new IoTDBRpcDataSet(
+            "",
+            resp1.getColumns(),
+            resp1.getDataTypeList(),
+            resp1.columnNameIndexMap,
+            resp1.ignoreTimeStamp,
+            resp1.queryId,
+            0,
+            this,
+            0,
+            resp1.queryDataSet,
+            10000,
+            60000);
+    IoTDBRpcDataSet rpcDataSet2 =
+        new IoTDBRpcDataSet(
+            "",
+            resp2.getColumns(),
+            resp2.getDataTypeList(),
+            resp2.columnNameIndexMap,
+            resp2.ignoreTimeStamp,
+            resp2.queryId,
+            0,
+            this,
+            0,
+            resp2.queryDataSet,
+            10000,
+            60000);
+
+    List<TSDataType> dataTypes1 = new ArrayList<>();
+    List<TSDataType> dataTypes2 = new ArrayList<>();
+    for (int i = 0; i < resp1.dataTypeList.size(); i++) {
+      dataTypes1.add(TSDataType.valueOf(resp1.dataTypeList.get(i)));
+    }
+    for (int i = 0; i < resp2.dataTypeList.size(); i++) {
+      dataTypes2.add(TSDataType.valueOf(resp2.dataTypeList.get(i)));
+    }
+    List<TSDataType> dataTypeAll = new ArrayList<>();
+    dataTypeAll.addAll(dataTypes1);
+    dataTypeAll.addAll(dataTypes2);
+    ListDataSet listDataSet = new ListDataSet(new ArrayList<>(), dataTypeAll);
+
+    while (rpcDataSet1.next() && rpcDataSet2.next()) {
+      RowRecord record = new RowRecord(rpcDataSet1.getTimestamp(1).getTime());
+      for (int i = 0; i < dataTypes1.size(); i++) {
+        switch (dataTypes1.get(i)) {
+          case INT32:
+            record.addField(rpcDataSet1.getInt(i + 2), TSDataType.INT32);
+            break;
+          case INT64:
+            record.addField(rpcDataSet1.getLong(i + 2), TSDataType.INT64);
+            break;
+          case DOUBLE:
+            record.addField(rpcDataSet1.getDouble(i + 2), TSDataType.DOUBLE);
+            break;
+          case FLOAT:
+            record.addField(rpcDataSet1.getFloat(i + 2), TSDataType.FLOAT);
+            break;
+        }
+      }
+
+      for (int i = 0; i < dataTypes2.size(); i++) {
+        switch (dataTypes2.get(i)) {
+          case INT32:
+            record.addField(rpcDataSet2.getInt(i + 2), TSDataType.INT32);
+            break;
+          case INT64:
+            record.addField(rpcDataSet2.getLong(i + 2), TSDataType.INT64);
+            break;
+          case DOUBLE:
+            record.addField(rpcDataSet2.getDouble(i + 2), TSDataType.DOUBLE);
+            break;
+          case FLOAT:
+            record.addField(rpcDataSet2.getFloat(i + 2), TSDataType.FLOAT);
+            break;
+        }
+      }
+      listDataSet.putRecord(record);
+    }
+
+    resp1.setQueryDataSet(
+        QueryDataSetUtils.convertQueryDataSetByFetchSize(listDataSet, 10000, null, null));
+    resp1.getColumns().addAll(resp2.getColumns());
+    resp1.getDataTypeList().addAll(resp2.getDataTypeList());
+    resp1.setColumnNameIndexMap(null);
+    return resp1;
   }
 
   public TSExecuteStatementResp mergeResp(
