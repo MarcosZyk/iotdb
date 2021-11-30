@@ -811,6 +811,7 @@ public class TSServiceImpl implements TSIService.Iface {
     ListDataSet listDataSet = new ListDataSet(new ArrayList<>(), dataTypes);
 
     int rowIndex = 0;
+    List<List<Long>> count = null;
     while (rpcDataSet1.next() && rpcDataSet2.next()) {
       RowRecord record = new RowRecord(rpcDataSet1.getTimestamp(1).getTime());
       for (int i = 0; i < dataTypes.size(); i++) {
@@ -831,6 +832,9 @@ public class TSServiceImpl implements TSIService.Iface {
             double doubleValue;
             if (resp1.count != null && resp2.count != null) {
               LOGGER.info("compute avg value");
+              if (count == null) {
+                count = resp1.getCount();
+              }
               double avgValue1 = rpcDataSet1.getDouble(i + 2);
               double avgValue2 = rpcDataSet2.getDouble(i + 2);
               long count1 = resp1.getCount().get(rowIndex).get(i);
@@ -840,6 +844,7 @@ public class TSServiceImpl implements TSIService.Iface {
               } else {
                 doubleValue = (avgValue1 * count1 + avgValue2 * count2) / (count1 + count2);
               }
+              count.get(rowIndex).set(i, count1 + count2);
             } else {
               doubleValue =
                   mergeResultValue(
@@ -858,6 +863,7 @@ public class TSServiceImpl implements TSIService.Iface {
       listDataSet.putRecord(record);
       rowIndex++;
     }
+    resp1.setCount(count);
     resp1.setQueryDataSet(
         QueryDataSetUtils.convertQueryDataSetByFetchSize(listDataSet, 10000, null, null));
     return resp1;
