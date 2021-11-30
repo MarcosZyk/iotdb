@@ -26,6 +26,7 @@ import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.query.aggregation.AggregateResult;
+import org.apache.iotdb.db.query.aggregation.impl.AvgAggrResult;
 import org.apache.iotdb.db.query.context.QueryContext;
 import org.apache.iotdb.db.query.factory.AggregateResultFactory;
 import org.apache.iotdb.db.query.filter.TsFileFilter;
@@ -147,12 +148,23 @@ public class GroupByWithoutValueFilterDataSet extends GroupByEngineDataSet {
       }
     }
 
+    List<Long> countList = null;
     for (AggregateResult res : fields) {
       if (res == null) {
         record.addField(null);
         continue;
       }
       record.addField(res.getResult(), res.getResultDataType());
+      if (res instanceof AvgAggrResult) {
+        if (countList == null) {
+          countList = new ArrayList<>();
+        }
+        countList.add(((AvgAggrResult) res).getCnt());
+      }
+    }
+    record.setCountList(countList);
+    if (countList != null && (countList.size() != fields.length)) {
+      logger.info("count size not equals to avg result size");
     }
     return record;
   }

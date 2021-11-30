@@ -19,6 +19,7 @@
 package org.apache.iotdb.db.utils;
 
 import org.apache.iotdb.db.tools.watermark.WatermarkEncoder;
+import org.apache.iotdb.service.rpc.thrift.TSExecuteStatementResp;
 import org.apache.iotdb.service.rpc.thrift.TSQueryDataSet;
 import org.apache.iotdb.tsfile.exception.write.UnSupportedDataTypeException;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -32,6 +33,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -44,7 +46,10 @@ public class QueryDataSetUtils {
 
   @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
   public static TSQueryDataSet convertQueryDataSetByFetchSize(
-      QueryDataSet queryDataSet, int fetchSize, WatermarkEncoder watermarkEncoder)
+      QueryDataSet queryDataSet,
+      int fetchSize,
+      WatermarkEncoder watermarkEncoder,
+      TSExecuteStatementResp resp)
       throws IOException {
     List<TSDataType> dataTypes = queryDataSet.getDataTypes();
     int columnNum = dataTypes.size();
@@ -63,10 +68,17 @@ public class QueryDataSetUtils {
     int[] valueOccupation = new int[columnNum];
     // used to record a bitmap for every 8 row record
     int[] bitmap = new int[columnNum];
+
+    List<List<Long>> countOfEachRow = null;
     for (int i = 0; i < fetchSize; i++) {
       if (queryDataSet.hasNext()) {
         RowRecord rowRecord = queryDataSet.next();
-
+        if (rowRecord.getCountList() != null) {
+          if (countOfEachRow == null) {
+            countOfEachRow = new ArrayList<>();
+          }
+          countOfEachRow.add(rowRecord.getCountList());
+        }
         // filter rows whose columns are null according to the rule
         if ((queryDataSet.isWithoutAllNull() && rowRecord.isAllNull())
             || (queryDataSet.isWithoutAnyNull() && rowRecord.hasNullField())) {
@@ -170,6 +182,10 @@ public class QueryDataSetUtils {
     }
     tsQueryDataSet.setBitmapList(bitmapList);
     tsQueryDataSet.setValueList(valueList);
+
+    if (resp != null && countOfEachRow != null) {
+      resp.setCount(countOfEachRow);
+    }
     return tsQueryDataSet;
   }
 

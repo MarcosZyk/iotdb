@@ -22,6 +22,7 @@ package org.apache.iotdb.db.query.dataset.groupby;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.query.aggregation.AggregateResult;
+import org.apache.iotdb.db.query.aggregation.impl.AvgAggrResult;
 import org.apache.iotdb.db.query.context.QueryContext;
 import org.apache.iotdb.db.utils.AggregateUtils;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -72,10 +73,18 @@ public class GroupByTimeDataSet extends QueryDataSet {
       RowRecord curRecord = new RowRecord(rawRecord.getTimestamp());
       List<AggregateResult> mergedAggResults =
           AggregateUtils.mergeRecordByPath(plan, rawRecord, finalPaths);
+      List<Long> countList = null;
       for (AggregateResult resultData : mergedAggResults) {
         TSDataType dataType = resultData.getResultDataType();
         curRecord.addField(resultData.getResult(), dataType);
+        if (resultData instanceof AvgAggrResult) {
+          if (countList == null) {
+            countList = new ArrayList<>();
+          }
+          countList.add(((AvgAggrResult) resultData).getCnt());
+        }
       }
+      curRecord.setCountList(countList);
       records.add(curRecord);
     }
 

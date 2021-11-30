@@ -33,6 +33,9 @@ public class RowRecord {
   /** if any column is not null, this field should be set to false; otherwise true */
   private boolean allNull = true;
 
+  /** only used in calculating avg value. */
+  private List<Long> countList = null;
+
   public RowRecord(long timestamp) {
     this.timestamp = timestamp;
     this.fields = new ArrayList<>();
@@ -48,6 +51,14 @@ public class RowRecord {
         allNull = false;
       }
     }
+  }
+
+  public List<Long> getCountList() {
+    return countList;
+  }
+
+  public void setCountList(List<Long> countList) {
+    this.countList = countList;
   }
 
   public void addField(Field f) {

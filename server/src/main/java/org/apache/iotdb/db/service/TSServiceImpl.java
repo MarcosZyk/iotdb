@@ -671,6 +671,10 @@ public class TSServiceImpl implements TSIService.Iface {
   public TSExecuteStatementResp mergeResp(
       TSExecuteStatementResp resp1, TSExecuteStatementResp resp2)
       throws StatementExecutionException, IoTDBConnectionException, IOException, TException {
+    if (resp2.columns == null || resp2.columns.size() == 0) {
+      return resp1;
+    }
+
     IoTDBRpcDataSet rpcDataSet1 =
         new IoTDBRpcDataSet(
             "",
@@ -704,34 +708,146 @@ public class TSServiceImpl implements TSIService.Iface {
     for (int i = 0; i < resp1.dataTypeList.size(); i++) {
       dataTypes.add(TSDataType.valueOf(resp1.dataTypeList.get(i)));
     }
+    AggregationResultType aggrFuncType = getAggregationFuncType(resp1.columns.get(0));
     ListDataSet listDataSet = new ListDataSet(new ArrayList<>(), dataTypes);
+
+    int rowIndex = 0;
     while (rpcDataSet1.next() && rpcDataSet2.next()) {
       RowRecord record = new RowRecord(rpcDataSet1.getTimestamp(1).getTime());
       for (int i = 0; i < dataTypes.size(); i++) {
         switch (dataTypes.get(i)) {
           case INT32:
-            int value = rpcDataSet1.getInt(i + 2) + rpcDataSet2.getInt(i + 2);
-            record.addField(value, TSDataType.INT32);
+            int intValue =
+                mergeResultValue(
+                    rpcDataSet1.getInt(i + 2), rpcDataSet2.getInt(i + 2), aggrFuncType);
+            record.addField(intValue, TSDataType.INT32);
             break;
           case INT64:
-            long longValue = rpcDataSet1.getLong(i + 2) + rpcDataSet2.getLong(i + 2);
+            long longValue =
+                mergeResultValue(
+                    rpcDataSet1.getLong(i + 2), rpcDataSet2.getLong(i + 2), aggrFuncType);
             record.addField(longValue, TSDataType.INT64);
             break;
           case DOUBLE:
-            double doubleValue = rpcDataSet1.getDouble(i + 2) + rpcDataSet2.getDouble(i + 2);
+            double doubleValue;
+            if (resp1.count != null && resp2.count != null) {
+              LOGGER.info("compute avg value");
+              double avgValue1 = rpcDataSet1.getDouble(i + 2);
+              double avgValue2 = rpcDataSet2.getDouble(i + 2);
+              long count1 = resp1.getCount().get(rowIndex).get(i);
+              long count2 = resp2.getCount().get(rowIndex).get(i);
+              if (count1 + count2 == 0) {
+                doubleValue = 0;
+              } else {
+                doubleValue = (avgValue1 * count1 + avgValue2 * count2) / (count1 + count2);
+              }
+            } else {
+              doubleValue =
+                  mergeResultValue(
+                      rpcDataSet1.getDouble(i + 2), rpcDataSet2.getDouble(i + 2), aggrFuncType);
+            }
             record.addField(doubleValue, TSDataType.DOUBLE);
             break;
           case FLOAT:
-            float floatValue = rpcDataSet1.getFloat(i + 2) + rpcDataSet2.getFloat(i + 2);
+            float floatValue =
+                mergeResultValue(
+                    rpcDataSet1.getFloat(i + 2), rpcDataSet2.getFloat(i + 2), aggrFuncType);
             record.addField(floatValue, TSDataType.FLOAT);
             break;
         }
       }
       listDataSet.putRecord(record);
+      rowIndex++;
     }
     resp1.setQueryDataSet(
-        QueryDataSetUtils.convertQueryDataSetByFetchSize(listDataSet, 10000, null));
+        QueryDataSetUtils.convertQueryDataSetByFetchSize(listDataSet, 10000, null, null));
     return resp1;
+  }
+
+  private AggregationResultType getAggregationFuncType(String column) {
+    if (column.startsWith("count")) {
+      return AggregationResultType.COUNT;
+    } else if (column.startsWith("sum")) {
+      return AggregationResultType.SUM;
+    } else if (column.startsWith("avg")) {
+      return AggregationResultType.AVG;
+    } else if (column.startsWith("max_value")) {
+      return AggregationResultType.MAX_VALUE;
+    } else if (column.startsWith("min_value")) {
+      return AggregationResultType.MIN_VALUE;
+    } else if (column.startsWith("max_time")) {
+      return AggregationResultType.MAX_TIME;
+    } else if (column.startsWith("min_time")) {
+      return AggregationResultType.MIN_TIME;
+    } else {
+      return AggregationResultType.COUNT;
+    }
+  }
+
+  private enum AggregationResultType {
+    COUNT,
+    SUM,
+    AVG,
+    MAX_VALUE,
+    MIN_VALUE,
+    MAX_TIME,
+    MIN_TIME
+  }
+
+  private int mergeResultValue(int value1, int value2, AggregationResultType type) {
+    // int: can only be MAX_VALUE or MIN_VALUE
+    switch (type) {
+      case MAX_VALUE:
+        return Math.max(value1, value2);
+      case MIN_VALUE:
+        return Math.min(value1, value2);
+      default:
+        return 0;
+    }
+  }
+
+  private long mergeResultValue(long value1, long value2, AggregationResultType type) {
+    // long: can only be COUNT, MAX_TIME, MIN_TIME, MAX_VALUE or MIN_VALUE
+    switch (type) {
+      case COUNT:
+        return value1 + value2;
+      case MAX_TIME:
+      case MAX_VALUE:
+        return Math.max(value1, value2);
+      case MIN_TIME:
+      case MIN_VALUE:
+        return Math.min(value1, value2);
+      default:
+        return 0;
+    }
+  }
+
+  private float mergeResultValue(float value1, float value2, AggregationResultType type) {
+    // float: can only be MAX_VALUE or MIN_VALUE
+    switch (type) {
+      case MAX_VALUE:
+        return Math.max(value1, value2);
+      case MIN_VALUE:
+        return Math.min(value1, value2);
+      default:
+        return 0;
+    }
+  }
+
+  private double mergeResultValue(double value1, double value2, AggregationResultType type) {
+    // double: can be SUM, (AVG), MAX_VALUE or MIN_VALUE
+    switch (type) {
+      case SUM:
+        return value1 + value2;
+      case AVG:
+        return value1;
+      case MAX_VALUE:
+        return Math.max(value1, value2);
+      case MIN_VALUE:
+        return Math.min(value1, value2);
+      default:
+        return 0;
+    }
   }
 
   @Override
@@ -888,7 +1004,7 @@ public class TSServiceImpl implements TSIService.Iface {
         resp.setNonAlignQueryDataSet(fillRpcNonAlignReturnData(fetchSize, newDataSet, username));
       } else {
         try {
-          TSQueryDataSet tsQueryDataSet = fillRpcReturnData(fetchSize, newDataSet, username);
+          TSQueryDataSet tsQueryDataSet = fillRpcReturnData(fetchSize, newDataSet, username, resp);
           resp.setQueryDataSet(tsQueryDataSet);
         } catch (RedirectException e) {
           LOGGER.debug("need to redirect {} {} to {}", statement, queryId, e.getEndPoint());
@@ -1135,14 +1251,14 @@ public class TSServiceImpl implements TSIService.Iface {
 
       QueryDataSet queryDataSet = sessionManager.getDataset(req.queryId);
       if (req.isAlign) {
+        TSFetchResultsResp resp = RpcUtils.getTSFetchResultsResp(TSStatusCode.SUCCESS_STATUS);
         TSQueryDataSet result =
             fillRpcReturnData(
-                req.fetchSize, queryDataSet, sessionManager.getUsername(req.sessionId));
+                req.fetchSize, queryDataSet, sessionManager.getUsername(req.sessionId), null);
         boolean hasResultSet = result.bufferForTime().limit() != 0;
         if (!hasResultSet) {
           releaseQueryResourceNoExceptions(req.queryId);
         }
-        TSFetchResultsResp resp = RpcUtils.getTSFetchResultsResp(TSStatusCode.SUCCESS_STATUS);
         resp.setHasResultSet(hasResultSet);
         resp.setQueryDataSet(result);
         resp.setIsAlign(true);
@@ -1186,12 +1302,12 @@ public class TSServiceImpl implements TSIService.Iface {
   }
 
   private TSQueryDataSet fillRpcReturnData(
-      int fetchSize, QueryDataSet queryDataSet, String userName)
+      int fetchSize, QueryDataSet queryDataSet, String userName, TSExecuteStatementResp resp)
       throws TException, AuthException, IOException, InterruptedException, QueryProcessException {
     WatermarkEncoder encoder = getWatermarkEncoder(userName);
     return queryDataSet instanceof DirectAlignByTimeDataSet
         ? ((DirectAlignByTimeDataSet) queryDataSet).fillBuffer(fetchSize, encoder)
-        : QueryDataSetUtils.convertQueryDataSetByFetchSize(queryDataSet, fetchSize, encoder);
+        : QueryDataSetUtils.convertQueryDataSetByFetchSize(queryDataSet, fetchSize, encoder, resp);
   }
 
   private TSQueryNonAlignDataSet fillRpcNonAlignReturnData(
