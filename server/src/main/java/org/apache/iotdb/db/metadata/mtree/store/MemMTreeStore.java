@@ -21,6 +21,7 @@ package org.apache.iotdb.db.metadata.mtree.store;
 import org.apache.iotdb.db.conf.IoTDBConstant;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.engine.fileSystem.SystemFileFactory;
+import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.metadata.MetadataConstant;
 import org.apache.iotdb.db.metadata.logfile.MLogReader;
 import org.apache.iotdb.db.metadata.logfile.MLogWriter;
@@ -192,6 +193,9 @@ public class MemMTreeStore implements IMTreeStore {
       throw e;
     }
   }
+
+  @Override
+  public void sync() throws MetadataException, IOException {}
 
   public void serializeTo(String snapshotPath) throws IOException {
     try (MLogWriter mLogWriter = new MLogWriter(snapshotPath)) {

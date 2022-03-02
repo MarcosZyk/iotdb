@@ -146,6 +146,10 @@ public class MTreeService implements Serializable {
     this.root = store.getRoot();
   }
 
+  public void sync() throws MetadataException, IOException {
+    store.sync();
+  }
+
   public void clear() {
     store.clear();
     root = store.getRoot();

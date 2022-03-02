@@ -292,6 +292,7 @@ public class MManager {
     try {
       isRecovering = true;
 
+      templateManager.init();
       tagManager.init();
       mtree = new MTreeService();
       mtree.init();
@@ -550,6 +551,20 @@ public class MManager {
         break;
       default:
         logger.error("Unrecognizable command {}", plan.getOperatorType());
+    }
+  }
+
+  public void flushMetadata() {
+    if (!config.isEnablePersistentSchema()) {
+      return;
+    }
+    try {
+      templateManager.sync();
+      tagManager.sync();
+      mtree.sync();
+      logWriter.clear();
+    } catch (MetadataException | IOException e) {
+      logger.error("Exception occurred while flushing MManager");
     }
   }
   // endregion
