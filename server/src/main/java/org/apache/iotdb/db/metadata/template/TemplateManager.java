@@ -40,7 +40,6 @@ import org.apache.iotdb.tsfile.file.metadata.enums.TSEncoding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -84,17 +83,19 @@ public class TemplateManager {
   }
 
   public void init() throws IOException {
-    String filePath =
-        IoTDBDescriptor.getInstance().getConfig().getSchemaDir()
-            + File.separator
-            + MetadataConstant.METADATA_LOG;
-    fileWriter = new TemplateFileWriter(filePath);
-    recoverFromTemplateFile(filePath);
+    fileWriter =
+        new TemplateFileWriter(
+            IoTDBDescriptor.getInstance().getConfig().getSchemaDir(),
+            MetadataConstant.TEMPLATE_FILE);
+    recoverFromTemplateFile();
     isRecover = false;
   }
 
-  private void recoverFromTemplateFile(String filePath) throws IOException {
-    TemplateFileReader reader = new TemplateFileReader(filePath);
+  private void recoverFromTemplateFile() throws IOException {
+    TemplateFileReader reader =
+        new TemplateFileReader(
+            IoTDBDescriptor.getInstance().getConfig().getSchemaDir(),
+            MetadataConstant.TEMPLATE_FILE);
     PhysicalPlan plan;
     int idx = 0;
     while (reader.hasNext()) {
@@ -130,6 +131,7 @@ public class TemplateManager {
         logger.error("Can not operate cmd {} in TemplateFile for err:", plan.getOperatorType(), e);
       }
     }
+    reader.close();
   }
 
   public void createSchemaTemplate(CreateTemplatePlan plan) throws MetadataException {
@@ -283,6 +285,6 @@ public class TemplateManager {
   public void clear() throws IOException {
     planBuffer.clear();
     templateMap.clear();
-    fileWriter.clear();
+    fileWriter.close();
   }
 }

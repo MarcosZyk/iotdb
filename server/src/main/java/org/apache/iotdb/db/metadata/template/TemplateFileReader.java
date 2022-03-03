@@ -27,8 +27,8 @@ public class TemplateFileReader implements AutoCloseable {
 
   private MLogReader logReader;
 
-  public TemplateFileReader(String filePath) throws IOException {
-    logReader = new MLogReader(filePath);
+  public TemplateFileReader(String schemaDir, String fileName) throws IOException {
+    logReader = new MLogReader(schemaDir, fileName);
   }
 
   public boolean hasNext() {

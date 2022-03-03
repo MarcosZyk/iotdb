@@ -30,8 +30,8 @@ public class TemplateFileWriter {
 
   private final MLogWriter logWriter;
 
-  public TemplateFileWriter(String filePath) throws IOException {
-    logWriter = new MLogWriter(filePath);
+  public TemplateFileWriter(String schemaDir, String fileName) throws IOException {
+    logWriter = new MLogWriter(schemaDir, fileName);
   }
 
   public void createSchemaTemplate(CreateTemplatePlan plan) throws IOException {
