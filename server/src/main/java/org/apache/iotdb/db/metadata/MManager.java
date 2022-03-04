@@ -300,6 +300,17 @@ public class MManager {
 
       logWriter = new MLogWriter(config.getSchemaDir(), MetadataConstant.METADATA_LOG);
       logWriter.setLogNum(lineNumber);
+
+      // todo fix me by refactoring tag recover
+      for (PartialPath path : mtree.getMeasurementPaths(new PartialPath("root.**"))) {
+        IMeasurementMNode measurementMNode = mtree.getMeasurementMNode(path);
+        if (measurementMNode.getOffset() != -1) {
+          tagManager.recoverIndex(measurementMNode.getOffset(), measurementMNode);
+        } else {
+          mtree.unPinMNode(measurementMNode);
+        }
+      }
+
       isRecovering = false;
     } catch (MetadataException | IOException e) {
       logger.error(
