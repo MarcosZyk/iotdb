@@ -353,6 +353,7 @@ public class CachedMTreeStore implements IMTreeStore {
   public void clear() {
     if (flushTask != null) {
       flushTask.shutdown();
+      while (!flushTask.isTerminated()) ;
       flushTask = null;
     }
     root = null;
@@ -360,7 +361,6 @@ public class CachedMTreeStore implements IMTreeStore {
     memManager.clear();
     if (file != null) {
       try {
-        file.clear();
         file.close();
       } catch (MetadataException | IOException e) {
         logger.error(String.format("Error occurred during SchemaFile clear, %s", e.getMessage()));

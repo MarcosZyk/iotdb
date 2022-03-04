@@ -199,7 +199,7 @@ public class MManager {
   private File logFile;
   private MLogWriter logWriter;
 
-  private MTreeService mtree;
+  private MTreeService mtree = MTreeService.getInstance();
   // device -> DeviceMNode
   private LoadingCache<PartialPath, IMNode> mNodeCache;
   private TagManager tagManager = TagManager.getInstance();
@@ -294,7 +294,6 @@ public class MManager {
 
       templateManager.init();
       tagManager.init();
-      mtree = new MTreeService();
       mtree.init();
 
       int lineNumber = initFromLog(logFile);

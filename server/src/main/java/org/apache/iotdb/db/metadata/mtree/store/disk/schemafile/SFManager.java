@@ -82,7 +82,9 @@ public class SFManager implements ISchemaFileManager {
   @Override
   public IMNode init() throws MetadataException, IOException {
     loadSchemaFiles();
-    return getUpperMTree();
+    IMNode result = MockSFManager.cloneMNode(root);
+    SchemaFile.setNodeAddress(result, 0);
+    return result;
   }
 
   @Override
@@ -388,6 +390,7 @@ public class SFManager implements ISchemaFileManager {
     for (int i = 1; i < nodes.length - 1; i++) {
       if (!cur.hasChild(nodes[i])) {
         cur.addChild(new InternalMNode(cur, nodes[i]));
+        SchemaFile.setNodeAddress(cur.getChild(nodes[i]), 0L);
       }
       cur = cur.getChild(nodes[i]);
       if (cur.isStorageGroup()) {

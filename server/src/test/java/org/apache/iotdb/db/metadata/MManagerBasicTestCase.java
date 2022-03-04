@@ -502,22 +502,18 @@ public abstract class MManagerBasicTestCase {
 
       // todo fix me while recover from schemaFile
       manager.clear();
-      MManager recoverManager = new MManager();
-      recoverManager.initForMultiMManagerTest();
+      manager.init();
 
-      assertTrue(recoverManager.isStorageGroup(new PartialPath("root.laptop.d1")));
-      assertFalse(recoverManager.isStorageGroup(new PartialPath("root.laptop.d2")));
-      assertFalse(recoverManager.isStorageGroup(new PartialPath("root.laptop.d3")));
-      assertFalse(recoverManager.isStorageGroup(new PartialPath("root.laptop")));
+      assertTrue(manager.isStorageGroup(new PartialPath("root.laptop.d1")));
+      assertFalse(manager.isStorageGroup(new PartialPath("root.laptop.d2")));
+      assertFalse(manager.isStorageGroup(new PartialPath("root.laptop.d3")));
+      assertFalse(manager.isStorageGroup(new PartialPath("root.laptop")));
       // prefix with *
       assertEquals(
           devices,
-          recoverManager.getMatchedDevices(new PartialPath("root.**"), false).stream()
+          manager.getMatchedDevices(new PartialPath("root.**"), false).stream()
               .map(PartialPath::getFullPath)
               .collect(Collectors.toSet()));
-
-      recoverManager.clear();
-      manager.init();
     } catch (MetadataException e) {
       e.printStackTrace();
       fail(e.getMessage());
@@ -1896,11 +1892,11 @@ public abstract class MManagerBasicTestCase {
 
       assertEquals(6, manager.getTotalSeriesNumber());
       EnvironmentUtils.restartDaemon();
-      assertEquals(6, manager.getTotalSeriesNumber());
+      assertEquals(6, manager.getAllTimeseriesCount(new PartialPath("root.*.**")));
       manager.deleteTimeseries(new PartialPath("root.laptop.d2.s1"));
-      assertEquals(5, manager.getTotalSeriesNumber());
+      assertEquals(5, manager.getAllTimeseriesCount(new PartialPath("root.*.**")));
       manager.deleteStorageGroups(Collections.singletonList(new PartialPath("root.laptop")));
-      assertEquals(0, manager.getTotalSeriesNumber());
+      assertEquals(0, manager.getAllTimeseriesCount(new PartialPath("root.*.**")));
     } catch (MetadataException e) {
       e.printStackTrace();
       fail(e.getMessage());

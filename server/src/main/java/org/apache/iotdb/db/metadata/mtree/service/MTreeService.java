@@ -132,6 +132,22 @@ public class MTreeService implements Serializable {
   private IMNode root;
   private IMTreeStore store;
 
+  // region MTree Singleton
+  private static class MTreeServiceHolder {
+
+    private MTreeServiceHolder() {
+      // allowed to do nothing
+    }
+
+    private static final MTreeService INSTANCE = new MTreeService();
+  }
+
+  /** we should not use this function in other place, but only in IoTDB class */
+  public static MTreeService getInstance() {
+    return MTreeService.MTreeServiceHolder.INSTANCE;
+  }
+  // endregion
+
   // region MTree initialization, clear and serialization
   public MTreeService() {}
 
