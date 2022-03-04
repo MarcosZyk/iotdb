@@ -19,12 +19,15 @@
 package org.apache.iotdb.db.metadata.template;
 
 import org.apache.iotdb.db.conf.IoTDBConstant;
+import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.exception.metadata.DuplicatedTemplateException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.metadata.UndefinedTemplateException;
+import org.apache.iotdb.db.metadata.MetadataConstant;
 import org.apache.iotdb.db.metadata.mnode.IMNode;
 import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.metadata.utils.MetaFormatUtils;
+import org.apache.iotdb.db.qp.physical.PhysicalPlan;
 import org.apache.iotdb.db.qp.physical.sys.AppendTemplatePlan;
 import org.apache.iotdb.db.qp.physical.sys.CreateTemplatePlan;
 import org.apache.iotdb.db.qp.physical.sys.DropTemplatePlan;
@@ -34,15 +37,28 @@ import org.apache.iotdb.tsfile.file.metadata.enums.CompressionType;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSEncoding;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TemplateManager {
 
+  private static final Logger logger = LoggerFactory.getLogger(TemplateManager.class);
+
   // template name -> template
-  private Map<String, Template> templateMap = new ConcurrentHashMap<>();
+  private final Map<String, Template> templateMap = new ConcurrentHashMap<>();
+
+  private Queue<PhysicalPlan> planBuffer = new LinkedList<>();
+  private TemplateFileWriter fileWriter;
+
+  private boolean isRecover;
 
   private static class TemplateManagerHolder {
 
@@ -62,7 +78,61 @@ public class TemplateManager {
     return new TemplateManager();
   }
 
-  private TemplateManager() {}
+  private TemplateManager() {
+    isRecover = true;
+  }
+
+  public void init() throws IOException {
+    fileWriter =
+        new TemplateFileWriter(
+            IoTDBDescriptor.getInstance().getConfig().getSchemaDir(),
+            MetadataConstant.TEMPLATE_FILE);
+    recoverFromTemplateFile();
+    isRecover = false;
+  }
+
+  private void recoverFromTemplateFile() throws IOException {
+    TemplateFileReader reader =
+        new TemplateFileReader(
+            IoTDBDescriptor.getInstance().getConfig().getSchemaDir(),
+            MetadataConstant.TEMPLATE_FILE);
+    PhysicalPlan plan;
+    int idx = 0;
+    while (reader.hasNext()) {
+      try {
+        plan = reader.next();
+        idx++;
+      } catch (Exception e) {
+        logger.error("Parse TemplateFile error at lineNumber {} because:", idx, e);
+        break;
+      }
+      if (plan == null) {
+        continue;
+      }
+      try {
+        switch (plan.getOperatorType()) {
+          case CREATE_TEMPLATE:
+            createSchemaTemplate((CreateTemplatePlan) plan);
+            break;
+          case APPEND_TEMPLATE:
+            appendSchemaTemplate((AppendTemplatePlan) plan);
+            break;
+          case PRUNE_TEMPLATE:
+            pruneSchemaTemplate((PruneTemplatePlan) plan);
+            break;
+          case DROP_TEMPLATE:
+            dropSchemaTemplate((DropTemplatePlan) plan);
+            break;
+          default:
+            throw new IOException(
+                "Template file corrupted. Read unknown plan type during recover.");
+        }
+      } catch (MetadataException | IOException e) {
+        logger.error("Can not operate cmd {} in TemplateFile for err:", plan.getOperatorType(), e);
+      }
+    }
+    reader.close();
+  }
 
   public void createSchemaTemplate(CreateTemplatePlan plan) throws MetadataException {
     // check schema and measurement name before create template
@@ -83,10 +153,18 @@ public class TemplateManager {
       // already have template
       throw new MetadataException("Duplicated template name: " + plan.getName());
     }
+
+    if (!isRecover) {
+      planBuffer.add(plan);
+    }
   }
 
-  public void dropSchemaTemplate(DropTemplatePlan plan) {
+  public void dropSchemaTemplate(DropTemplatePlan plan) throws MetadataException {
     templateMap.remove(plan.getName());
+
+    if (!isRecover) {
+      planBuffer.add(plan);
+    }
   }
 
   public void appendSchemaTemplate(AppendTemplatePlan plan) throws MetadataException {
@@ -109,6 +187,10 @@ public class TemplateManager {
       } else {
         temp.addUnalignedMeasurements(measurements, dataTypes, encodings, compressionTypes);
       }
+
+      if (!isRecover) {
+        planBuffer.add(plan);
+      }
     } else {
       throw new MetadataException("Template does not exists:" + plan.getName());
     }
@@ -120,6 +202,10 @@ public class TemplateManager {
     if (temp != null) {
       for (int i = 0; i < plan.getPrunedMeasurements().size(); i++) {
         temp.deleteSeriesCascade(plan.getPrunedMeasurements().get(i));
+      }
+
+      if (!isRecover) {
+        planBuffer.add(plan);
       }
     } else {
       throw new MetadataException("Template does not exists:" + plan.getName());
@@ -172,7 +258,33 @@ public class TemplateManager {
     }
   }
 
-  public void clear() {
+  public void sync() throws MetadataException, IOException {
+    PhysicalPlan plan;
+    while (!planBuffer.isEmpty()) {
+      plan = planBuffer.poll();
+      switch (plan.getOperatorType()) {
+        case CREATE_TEMPLATE:
+          fileWriter.createSchemaTemplate((CreateTemplatePlan) plan);
+          break;
+        case APPEND_TEMPLATE:
+          fileWriter.appendSchemaTemplate((AppendTemplatePlan) plan);
+          break;
+        case PRUNE_TEMPLATE:
+          fileWriter.pruneSchemaTemplate((PruneTemplatePlan) plan);
+          break;
+        case DROP_TEMPLATE:
+          fileWriter.dropSchemaTemplate((DropTemplatePlan) plan);
+          break;
+        default:
+          break;
+      }
+    }
+    fileWriter.force();
+  }
+
+  public void clear() throws IOException {
+    planBuffer.clear();
     templateMap.clear();
+    fileWriter.close();
   }
 }

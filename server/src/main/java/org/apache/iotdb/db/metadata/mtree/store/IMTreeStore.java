@@ -60,6 +60,8 @@ public interface IMTreeStore {
 
   void createSnapshot() throws IOException;
 
+  void sync() throws MetadataException, IOException;
+
   void clear();
 
   String toString();

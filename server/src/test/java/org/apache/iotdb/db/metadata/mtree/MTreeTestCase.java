@@ -40,7 +40,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -70,14 +69,7 @@ public abstract class MTreeTestCase {
   }
 
   private MTreeService getNewMTree() {
-    try {
-      MTreeService root = new MTreeService();
-      root.init();
-      return root;
-    } catch (MetadataException | IOException e) {
-      fail();
-    }
-    return null;
+    return MTreeService.getInstance();
   }
 
   @Test

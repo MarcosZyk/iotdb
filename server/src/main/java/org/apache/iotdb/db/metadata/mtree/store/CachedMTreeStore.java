@@ -32,6 +32,7 @@ import org.apache.iotdb.db.metadata.mtree.store.disk.cache.LRUCacheStrategy;
 import org.apache.iotdb.db.metadata.mtree.store.disk.cache.MemManager;
 import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.ISchemaFileManager;
 import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.SFManager;
+import org.apache.iotdb.db.service.IoTDB;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -342,11 +343,17 @@ public class CachedMTreeStore implements IMTreeStore {
   @Override
   public void createSnapshot() throws IOException {}
 
+  @Override
+  public void sync() throws MetadataException, IOException {
+    flushVolatileNodes();
+  }
+
   /** clear all the data of MTreeStore in memory and disk. */
   @Override
   public void clear() {
     if (flushTask != null) {
       flushTask.shutdown();
+      while (!flushTask.isTerminated()) ;
       flushTask = null;
     }
     root = null;
@@ -354,7 +361,6 @@ public class CachedMTreeStore implements IMTreeStore {
     memManager.clear();
     if (file != null) {
       try {
-        file.clear();
         file.close();
       } catch (MetadataException | IOException e) {
         logger.error(String.format("Error occurred during SchemaFile clear, %s", e.getMessage()));
@@ -399,7 +405,11 @@ public class CachedMTreeStore implements IMTreeStore {
       return;
     }
     hasFlushTask = true;
-    flushTask.submit(this::flushVolatileNodes);
+    flushTask.submit(this::triggerMManagerFlush);
+  }
+
+  private void triggerMManagerFlush() {
+    IoTDB.metaManager.flushMetadata();
   }
 
   /** Sync all volatile nodes to schemaFile and execute memory release after flush. */

@@ -578,6 +578,10 @@ public class TagManager {
     return tagLogFile.read(config.getTagAttributeTotalSize(), tagFileOffset);
   }
 
+  public void sync() throws IOException {
+    tagLogFile.sync();
+  }
+
   public void clear() throws IOException {
     this.tagIndex.clear();
     if (tagLogFile != null) {

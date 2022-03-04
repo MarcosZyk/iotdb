@@ -149,6 +149,10 @@ public class TagLogFile implements AutoCloseable {
     }
   }
 
+  public void sync() throws IOException {
+    fileChannel.force(true);
+  }
+
   @Override
   public void close() throws IOException {
     fileChannel.force(true);

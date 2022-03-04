@@ -199,7 +199,7 @@ public class MManager {
   private File logFile;
   private MLogWriter logWriter;
 
-  private MTreeService mtree;
+  private MTreeService mtree = MTreeService.getInstance();
   // device -> DeviceMNode
   private LoadingCache<PartialPath, IMNode> mNodeCache;
   private TagManager tagManager = TagManager.getInstance();
@@ -292,14 +292,25 @@ public class MManager {
     try {
       isRecovering = true;
 
+      templateManager.init();
       tagManager.init();
-      mtree = new MTreeService();
       mtree.init();
 
       int lineNumber = initFromLog(logFile);
 
       logWriter = new MLogWriter(config.getSchemaDir(), MetadataConstant.METADATA_LOG);
       logWriter.setLogNum(lineNumber);
+
+      // todo fix me by refactoring tag recover
+      for (PartialPath path : mtree.getMeasurementPaths(new PartialPath("root.**"))) {
+        IMeasurementMNode measurementMNode = mtree.getMeasurementMNode(path);
+        if (measurementMNode.getOffset() != -1) {
+          tagManager.recoverIndex(measurementMNode.getOffset(), measurementMNode);
+        } else {
+          mtree.unPinMNode(measurementMNode);
+        }
+      }
+
       isRecovering = false;
     } catch (MetadataException | IOException e) {
       logger.error(
@@ -550,6 +561,20 @@ public class MManager {
         break;
       default:
         logger.error("Unrecognizable command {}", plan.getOperatorType());
+    }
+  }
+
+  public void flushMetadata() {
+    if (!config.isEnablePersistentSchema()) {
+      return;
+    }
+    try {
+      templateManager.sync();
+      tagManager.sync();
+      mtree.sync();
+      logWriter.clear();
+    } catch (MetadataException | IOException e) {
+      logger.error("Exception occurred while flushing MManager");
     }
   }
   // endregion
