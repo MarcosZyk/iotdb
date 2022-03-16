@@ -17,6 +17,7 @@ on:
       - master
       - 'rel/*'
       - "new_*"
+      - test_workflow
     paths-ignore:
       - 'docs/**'
   # allow manually run the action:
