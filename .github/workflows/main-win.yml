@@ -9,6 +9,7 @@ on:
       - master
       - 'rel/*'
       - "new_*"
+      - test_workflow
     paths-ignore:
       - 'docs/**'
   pull_request:
