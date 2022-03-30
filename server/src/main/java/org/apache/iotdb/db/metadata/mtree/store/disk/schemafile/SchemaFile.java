@@ -172,13 +172,15 @@ public class SchemaFile implements ISchemaFile {
     pageLocks = new PageLocks();
 
     dirtyPageTable = new HashMap<>();
-    logFile = SystemFileFactory.INSTANCE.getFile(SchemaFile.SCHEMA_FOLDER
-        + File.separator
-        + sgName
-        + File.separator
-        + schemaRegionId.getSchemaRegionId()
-        + File.separator
-        + MetadataConstant.SCHEMA_FILE_LOG);
+    logFile =
+        SystemFileFactory.INSTANCE.getFile(
+            SchemaFile.SCHEMA_FOLDER
+                + File.separator
+                + sgName
+                + File.separator
+                + schemaRegionId.getSchemaRegionId()
+                + File.separator
+                + MetadataConstant.SCHEMA_FILE_LOG);
     logBuffer = ByteBuffer.allocate(PAGE_LENGTH);
 
     // will be overwritten if to init
@@ -188,7 +190,9 @@ public class SchemaFile implements ISchemaFile {
     initFileHeader();
     initFromSchemaLog();
 
-    logWriter = new LogWriter(logFile, IoTDBDescriptor.getInstance().getConfig().getSyncMlogPeriodInMs() == 0);
+    logWriter =
+        new LogWriter(
+            logFile, IoTDBDescriptor.getInstance().getConfig().getSyncMlogPeriodInMs() == 0);
   }
 
   public static ISchemaFile initSchemaFile(String sgName, SchemaRegionId schemaRegionId)
@@ -424,7 +428,8 @@ public class SchemaFile implements ISchemaFile {
           curPage.removeRecord(getSegIndex(actualSegAddr), entry.getKey());
 
           dirtyPageTable.put(curPage.getPageIndex(), curPage);
-          dirtyPageTable.put(getPageIndex(existedSegAddr), getPageInstance(getPageIndex(existedSegAddr)));
+          dirtyPageTable.put(
+              getPageIndex(existedSegAddr), getPageInstance(getPageIndex(existedSegAddr)));
         }
       }
     }
@@ -870,7 +875,7 @@ public class SchemaFile implements ISchemaFile {
       return;
     }
 
-    for (Map.Entry<Integer, ISchemaPage> dPage: dirtyPageTable.entrySet()) {
+    for (Map.Entry<Integer, ISchemaPage> dPage : dirtyPageTable.entrySet()) {
       dPage.getValue().syncPageBuffer();
       logBuffer.clear();
       dPage.getValue().getPageBuffer(logBuffer);
@@ -904,12 +909,13 @@ public class SchemaFile implements ISchemaFile {
   /**
    * Works as an imitation of {@link SingleFileLogReader}, but less complicated with log content.
    */
-  private synchronized void initFromSchemaLog() throws IOException{
+  private synchronized void initFromSchemaLog() throws IOException {
     if (!logFile.exists()) {
       return;
     }
 
-    DataInputStream logReader = new DataInputStream(new BufferedInputStream(new FileInputStream(logFile)));
+    DataInputStream logReader =
+        new DataInputStream(new BufferedInputStream(new FileInputStream(logFile)));
     CRC32 checkSummer = new CRC32();
     byte[] readLog;
 
@@ -926,7 +932,8 @@ public class SchemaFile implements ISchemaFile {
 
       if (checkSum != checkSummer.getValue()) {
         logReader.close();
-        throw new IOException(String.format("SchemaLog[%s] has been corrupted.", logFile.getAbsolutePath()));
+        throw new IOException(
+            String.format("SchemaLog[%s] has been corrupted.", logFile.getAbsolutePath()));
       }
 
       // every readBuffer is individual since readLog is initiated every loop
