@@ -58,7 +58,7 @@ public class SegmentTest {
       int res = sf.insertRecord(node.getName(), RecordUtils.node2Buffer(node));
       // System.out.println(res);
     }
-    sf.syncBuffer();
+    sf.syncSegmentBuffer();
 
     // System.out.println(sf);
     ByteBuffer recMid01 = sf.getRecord("mid1");

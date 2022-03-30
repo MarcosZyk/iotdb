@@ -371,7 +371,7 @@ public class Segment implements ISegment {
   }
 
   @Override
-  public void syncBuffer() {
+  public void syncSegmentBuffer() {
     ByteBuffer prefBuffer = ByteBuffer.allocate(Segment.SEG_HEADER_SIZE + pairLength);
 
     ReadWriteIOUtils.write(length, prefBuffer);
@@ -429,7 +429,7 @@ public class Segment implements ISegment {
       return;
     }
     if (sizeGap == 0) {
-      this.syncBuffer();
+      this.syncSegmentBuffer();
       this.buffer.clear();
       newBuffer.put(this.buffer);
       this.buffer.clear();
@@ -485,7 +485,7 @@ public class Segment implements ISegment {
   // region Segment & Record Buffer Operation
 
   public ByteBuffer getBufferCopy() {
-    syncBuffer();
+    syncSegmentBuffer();
     ByteBuffer newBuffer = ByteBuffer.allocate(this.buffer.capacity());
     this.buffer.clear();
     newBuffer.put(this.buffer);

@@ -285,7 +285,7 @@ public class SchemaPage implements ISchemaPage {
     ReadWriteIOUtils.write(pageDelFlag, pageBuffer);
 
     for (Map.Entry<Short, ISegment> entry : segCacheMap.entrySet()) {
-      entry.getValue().syncBuffer();
+      entry.getValue().syncSegmentBuffer();
     }
 
     pageBuffer.position(SchemaFile.PAGE_LENGTH - segNum * SchemaFile.SEG_OFF_DIG);
@@ -369,8 +369,8 @@ public class SchemaPage implements ISchemaPage {
     StringBuilder builder =
         new StringBuilder(
             String.format(
-                "SchemaPage Inspect: id:%d, totalSeg:%d, spareOffset:%d\n",
-                pageIndex, segNum, pageSpareOffset));
+                "SchemaPage Inspect: id:%d, totalSeg:%d, spareOffset:%d, spareSpaceInPage:%d\n",
+                pageIndex, segNum, pageSpareOffset, getSpareSize()));
     for (int idx = 0; idx < segOffsetLst.size(); idx++) {
       short offset = segOffsetLst.get(idx);
       if (offset < 0) {
@@ -486,8 +486,6 @@ public class SchemaPage implements ISchemaPage {
    * segCacheMap.
    *
    * <p><b> The new segment could be allocated from spare space or rearranged space.</b>
-   *
-   * <p>TODO: maybe relocate in-place first
    *
    * @param seg original segment instance
    * @param segIdx original segment index

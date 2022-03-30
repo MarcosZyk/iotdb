@@ -33,12 +33,18 @@ import org.apache.iotdb.db.metadata.mnode.StorageGroupMNode;
 import org.apache.iotdb.db.metadata.mtree.store.disk.ICachedMNodeContainer;
 import org.apache.iotdb.db.metadata.template.TemplateManager;
 import org.apache.iotdb.db.metadata.utils.MetaUtils;
+import org.apache.iotdb.db.writelog.io.ILogWriter;
+import org.apache.iotdb.db.writelog.io.LogWriter;
+import org.apache.iotdb.db.writelog.io.SingleFileLogReader;
 import org.apache.iotdb.tsfile.utils.ReadWriteIOUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.BufferOverflowException;
@@ -50,6 +56,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.zip.CRC32;
 
 /**
  * This class is mainly aimed to manage space all over the file.
@@ -73,7 +80,7 @@ public class SchemaFile implements ISchemaFile {
           .getConfig()
           .getPageCacheSizeInSchemaFile(); // size of page cache
   public static int ROOT_INDEX = 0; // index of header page
-  // 32 bit for page pointer, maximum .pmt file as 2^(32+14) bytes, 64 TiB
+  // 31 bit for page pointer, maximum .pst file as 2^(31+14) bytes, 32 TiB
   public static int INDEX_LENGTH = 4;
 
   // byte length of short, which is the type of index of segment inside a page
@@ -86,6 +93,11 @@ public class SchemaFile implements ISchemaFile {
           : IoTDBDescriptor.getInstance().getConfig().getMinimumSegmentInSchemaFile();
   public static int SEG_INDEX_DIGIT = 16; // for type short
   public static long SEG_INDEX_MASK = 0xffffL; // to translate address
+
+  public static boolean USE_SCHEMA_LOG = true; // reliable but a bit slower
+  // tokens in schema log, should not be valid for page index
+  public static int LOG_PREPARE_TOKEN = 0xffffffff;
+  public static int LOG_COMMIT_TOKEN = 0xfffffffe;
 
   // folder to store .pmt files
   public static String SCHEMA_FOLDER = IoTDBDescriptor.getInstance().getConfig().getSchemaDir();
@@ -109,6 +121,12 @@ public class SchemaFile implements ISchemaFile {
   // attributes for file
   File pmtFile;
   FileChannel channel;
+
+  // dirty page management
+  Map<Integer, ISchemaPage> dirtyPageTable;
+  File logFile;
+  ILogWriter logWriter;
+  ByteBuffer logBuffer;
 
   private SchemaFile(
       String sgName, SchemaRegionId schemaRegionId, boolean override, long ttl, boolean isEntity)
@@ -152,11 +170,25 @@ public class SchemaFile implements ISchemaFile {
     pageInstCache = Collections.synchronizedMap(new LinkedHashMap<>(PAGE_CACHE_SIZE, 1, true));
     evictLock = new ReentrantLock();
     pageLocks = new PageLocks();
+
+    dirtyPageTable = new HashMap<>();
+    logFile = SystemFileFactory.INSTANCE.getFile(SchemaFile.SCHEMA_FOLDER
+        + File.separator
+        + sgName
+        + File.separator
+        + schemaRegionId.getSchemaRegionId()
+        + File.separator
+        + MetadataConstant.SCHEMA_FILE_LOG);
+    logBuffer = ByteBuffer.allocate(PAGE_LENGTH);
+
     // will be overwritten if to init
     this.dataTTL = ttl;
     this.isEntity = isEntity;
     this.templateHash = 0;
     initFileHeader();
+    initFromSchemaLog();
+
+    logWriter = new LogWriter(logFile, IoTDBDescriptor.getInstance().getConfig().getSyncMlogPeriodInMs() == 0);
   }
 
   public static ISchemaFile initSchemaFile(String sgName, SchemaRegionId schemaRegionId)
@@ -242,6 +274,8 @@ public class SchemaFile implements ISchemaFile {
         if (getNodeAddress(child) < 0) {
           short estSegSize = estimateSegmentSize(child);
           long glbIndex = preAllocateSegment(estSegSize);
+
+          dirtyPageTable.put(getPageIndex(glbIndex), getPageInstance(getPageIndex(glbIndex)));
           setNodeAddress(child, glbIndex);
         } else {
           // new child with a valid segment address, weird
@@ -273,6 +307,9 @@ public class SchemaFile implements ISchemaFile {
           npAddress = curPage.write(curSegIdx, entry.getKey(), childBuffer);
         }
 
+        if (npAddress == 0) {
+          dirtyPageTable.put(curPage.getPageIndex(), curPage);
+        }
       } catch (SchemaPageOverflowException e) {
         // there is no more next page, need allocate new page
         short newSegSize = SchemaFile.reEstimateSegSize(curPage.getSegmentSize(curSegIdx));
@@ -282,6 +319,14 @@ public class SchemaFile implements ISchemaFile {
           // segment on multi pages
           short newSegId = newPage.allocNewSegment(newSegSize);
           long newSegAddr = SchemaFile.getGlobalIndex(newPage.getPageIndex(), newSegId);
+
+          long nextSegAddr = curPage.getNextSegAddress(curSegIdx);
+          if (nextSegAddr != -1) {
+            ISchemaPage nextPage = getPageInstance(getPageIndex(nextSegAddr));
+            nextPage.setPrevSegAddress(getSegIndex(nextSegAddr), newSegAddr);
+            newPage.setNextSegAddress(getSegIndex(newSegAddr), nextSegAddr);
+            dirtyPageTable.put(nextPage.getPageIndex(), newPage);
+          }
 
           // note that it doesn't modify address of node nor parental record
           newPage.setPrevSegAddress(newSegId, curSegAddr);
@@ -298,6 +343,9 @@ public class SchemaFile implements ISchemaFile {
           setNodeAddress(node, curSegAddr);
           updateParentalRecord(node.getParent(), node.getName(), curSegAddr);
         }
+
+        dirtyPageTable.put(newPage.getPageIndex(), newPage);
+        dirtyPageTable.put(curPage.getPageIndex(), curPage);
 
         curPage = newPage;
         pageIndex = curPage.getPageIndex();
@@ -330,6 +378,7 @@ public class SchemaFile implements ISchemaFile {
         // failed, throw exception
         curPage.update(curSegIdx, entry.getKey(), childBuffer);
 
+        dirtyPageTable.put(curPage.getPageIndex(), curPage);
       } catch (SchemaPageOverflowException e) {
         short newSegSize = reEstimateSegSize(curPage.getSegmentSize(curSegIdx));
         if (curPage.getSegmentSize(curSegIdx) != newSegSize) {
@@ -343,6 +392,9 @@ public class SchemaFile implements ISchemaFile {
           curPage.deleteSegment(curSegIdx);
           setNodeAddress(node, newSegAddr);
           updateParentalRecord(node.getParent(), node.getName(), newSegAddr);
+
+          dirtyPageTable.put(curPage.getPageIndex(), curPage);
+          dirtyPageTable.put(newPage.getPageIndex(), newPage);
         } else {
           // already full page segment, write updated record to another applicable segment or a
           // blank new one
@@ -358,6 +410,7 @@ public class SchemaFile implements ISchemaFile {
             if (nextSegAddr != -1) {
               ISchemaPage nextPage = getPageInstance(getPageIndex(nextSegAddr));
               nextPage.setPrevSegAddress(getSegIndex(nextSegAddr), existedSegAddr);
+              dirtyPageTable.put(nextPage.getPageIndex(), nextPage);
             }
 
             newPage.setNextSegAddress(getSegIndex(existedSegAddr), nextSegAddr);
@@ -369,9 +422,14 @@ public class SchemaFile implements ISchemaFile {
           getPageInstance(getPageIndex(existedSegAddr))
               .write(getSegIndex(existedSegAddr), entry.getKey(), childBuffer);
           curPage.removeRecord(getSegIndex(actualSegAddr), entry.getKey());
+
+          dirtyPageTable.put(curPage.getPageIndex(), curPage);
+          dirtyPageTable.put(getPageIndex(existedSegAddr), getPageInstance(getPageIndex(existedSegAddr)));
         }
       }
     }
+
+    logAndFlushDirtyPages();
   }
 
   @Override
@@ -380,9 +438,12 @@ public class SchemaFile implements ISchemaFile {
     recSegAddr = getTargetSegmentAddress(recSegAddr, node.getName());
     getPageInstance(getPageIndex(recSegAddr)).removeRecord(getSegIndex(recSegAddr), node.getName());
 
+    dirtyPageTable.put(getPageIndex(recSegAddr), getPageInstance(getPageIndex(recSegAddr)));
+
     if (!node.isMeasurement()) {
       long delSegAddr = getNodeAddress(node);
       getPageInstance(getPageIndex(delSegAddr)).deleteSegment(getSegIndex(delSegAddr));
+      dirtyPageTable.put(getPageIndex(delSegAddr), getPageInstance(getPageIndex(delSegAddr)));
     }
   }
 
@@ -472,19 +533,24 @@ public class SchemaFile implements ISchemaFile {
   @Override
   public void close() throws IOException {
     updateHeader();
-    flushPageToFile(rootPage);
-    for (Map.Entry<Integer, ISchemaPage> entry : pageInstCache.entrySet()) {
-      flushPageToFile(entry.getValue());
+    flushPageWithSync(rootPage);
+    if (!USE_SCHEMA_LOG) {
+      for (Map.Entry<Integer, ISchemaPage> entry : pageInstCache.entrySet()) {
+        flushPageWithSync(entry.getValue());
+      }
     }
+    logWriter.close();
     channel.close();
   }
 
   @Override
   public void sync() throws IOException {
     updateHeader();
-    flushPageToFile(rootPage);
-    for (Map.Entry<Integer, ISchemaPage> entry : pageInstCache.entrySet()) {
-      flushPageToFile(entry.getValue());
+    flushPageWithSync(rootPage);
+    if (!USE_SCHEMA_LOG) {
+      for (Map.Entry<Integer, ISchemaPage> entry : pageInstCache.entrySet()) {
+        flushPageWithSync(entry.getValue());
+      }
     }
   }
 
@@ -532,7 +598,6 @@ public class SchemaFile implements ISchemaFile {
    *   <li>1 int (4 bytes): last page index
    *   <li>var length: root(SG) node info
    *       <ul>
-   *         <li><s>a. var length string (less than 200 bytes): path to root(SG) node</s>
    *         <li>a. 1 long (8 bytes): dataTTL
    *         <li>b. 1 bool (1 byte): isEntityStorageGroup
    *         <li>c. 1 int (4 bytes): hash code of template name
@@ -749,6 +814,10 @@ public class SchemaFile implements ISchemaFile {
   }
 
   private ISchemaPage allocateNewPage() throws IOException {
+    if (lastPageIndex == Integer.MAX_VALUE) {
+      throw new IOException("Too many pages in single schema file.");
+    }
+
     lastPageIndex += 1;
     ISchemaPage newPage = SchemaPage.initPage(ByteBuffer.allocate(PAGE_LENGTH), lastPageIndex);
     addPageToCache(newPage.getPageIndex(), newPage);
@@ -771,7 +840,10 @@ public class SchemaFile implements ISchemaFile {
             //  this may produce an inefficient eviction
             if (pageLocks.findLock(id).writeLock().tryLock()) {
               try {
-                flushPageToFile(pageInstCache.get(id));
+                if (!USE_SCHEMA_LOG) {
+                  flushPageWithSync(pageInstCache.get(id));
+                }
+
                 pageInstCache.remove(id);
               } finally {
                 pageLocks.writeUnlock(id);
@@ -782,6 +854,111 @@ public class SchemaFile implements ISchemaFile {
       } finally {
         evictLock.unlock();
       }
+    }
+  }
+
+  // endregion
+
+  // region Recovery
+
+  private synchronized void logAndFlushDirtyPages() throws IOException {
+    // flush all pages into log
+    logBuffer.clear();
+
+    if (!USE_SCHEMA_LOG) {
+      dirtyPageTable.clear();
+      return;
+    }
+
+    for (Map.Entry<Integer, ISchemaPage> dPage: dirtyPageTable.entrySet()) {
+      dPage.getValue().syncPageBuffer();
+      logBuffer.clear();
+      dPage.getValue().getPageBuffer(logBuffer);
+      logWriter.write(logBuffer);
+    }
+
+    // write prepare token
+    logBuffer.clear();
+    ReadWriteIOUtils.write(LOG_PREPARE_TOKEN, logBuffer);
+    logWriter.write(logBuffer);
+    logWriter.force();
+
+    // flush pages into schema file with seeking
+    flushDirtyPages();
+
+    // write commit token
+    logBuffer.clear();
+    ReadWriteIOUtils.write(LOG_COMMIT_TOKEN, logBuffer);
+    logWriter.write(logBuffer);
+
+    dirtyPageTable.clear();
+
+    // truncate log if there is always commited
+    if (Files.size(logFile.toPath()) > (long) PAGE_LENGTH * PAGE_CACHE_SIZE) {
+      logWriter.close();
+      logFile.delete();
+      logFile = SystemFileFactory.INSTANCE.getFile(logFile.toURI());
+    }
+  }
+
+  /**
+   * Works as an imitation of {@link SingleFileLogReader}, but less complicated with log content.
+   */
+  private synchronized void initFromSchemaLog() throws IOException{
+    if (!logFile.exists()) {
+      return;
+    }
+
+    DataInputStream logReader = new DataInputStream(new BufferedInputStream(new FileInputStream(logFile)));
+    CRC32 checkSummer = new CRC32();
+    byte[] readLog;
+
+    dirtyPageTable.clear();
+
+    // collect all logs
+    while (logReader.available() > SingleFileLogReader.LEAST_LOG_SIZE) {
+      int logLength = logReader.readInt();
+      readLog = new byte[logLength];
+      logReader.read(readLog, 0, logLength);
+      final long checkSum = logReader.readLong();
+      checkSummer.reset();
+      checkSummer.update(readLog, 0, logLength);
+
+      if (checkSum != checkSummer.getValue()) {
+        logReader.close();
+        throw new IOException(String.format("SchemaLog[%s] has been corrupted.", logFile.getAbsolutePath()));
+      }
+
+      // every readBuffer is individual since readLog is initiated every loop
+      ByteBuffer readBuffer = ByteBuffer.wrap(readLog);
+      int pageIndex = readBuffer.getInt();
+      if (pageIndex < 0 && pageIndex != LOG_COMMIT_TOKEN && pageIndex != LOG_PREPARE_TOKEN) {
+        logReader.close();
+        throw new IOException(String.format("Unknown page index in SchemaLog: %d", pageIndex));
+      }
+
+      if (pageIndex == LOG_COMMIT_TOKEN) {
+        // all logs above have been completed
+        dirtyPageTable.clear();
+      } else if (pageIndex == LOG_PREPARE_TOKEN) {
+        // do nothing
+      } else {
+        // init page as dirty
+        readBuffer.clear();
+        dirtyPageTable.put(pageIndex, SchemaPage.loadPage(readBuffer, pageIndex));
+      }
+    }
+
+    logReader.close();
+    flushDirtyPages();
+  }
+
+  private void flushDirtyPages() throws IOException {
+    for (ISchemaPage page : dirtyPageTable.values()) {
+      logBuffer.clear();
+      page.getPageBuffer(logBuffer);
+      logBuffer.flip();
+      channel.write(logBuffer, getPageAddress(page.getPageIndex()));
     }
   }
 
@@ -808,6 +985,7 @@ public class SchemaFile implements ISchemaFile {
     long parSegAddr = parent.getParent() == null ? ROOT_INDEX : getNodeAddress(parent);
     parSegAddr = getTargetSegmentAddress(parSegAddr, key);
     ISchemaPage page = getPageInstance(getPageIndex(parSegAddr));
+    dirtyPageTable.put(page.getPageIndex(), page);
     ((SchemaPage) page).updateRecordSegAddr(getSegIndex(parSegAddr), key, newSegAddr);
   }
 
@@ -881,7 +1059,7 @@ public class SchemaFile implements ISchemaFile {
     return node;
   }
 
-  private void flushPageToFile(ISchemaPage src) throws IOException {
+  private void flushPageWithSync(ISchemaPage src) throws IOException {
     if (src == null) {
       return;
     }

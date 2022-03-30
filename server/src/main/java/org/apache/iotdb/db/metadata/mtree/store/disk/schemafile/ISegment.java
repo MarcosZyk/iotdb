@@ -60,7 +60,7 @@ public interface ISegment {
    * Records are always sync with buffer, but header and key-address list are not. This method sync
    * these values to the buffer.
    */
-  void syncBuffer();
+  void syncSegmentBuffer();
 
   short size();
 
