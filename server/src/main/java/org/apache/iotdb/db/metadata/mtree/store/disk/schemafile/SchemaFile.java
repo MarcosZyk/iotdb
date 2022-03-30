@@ -189,10 +189,7 @@ public class SchemaFile implements ISchemaFile {
     this.templateHash = 0;
     initFileHeader();
     initFromSchemaLog();
-
-    logWriter =
-        new LogWriter(
-            logFile, IoTDBDescriptor.getInstance().getConfig().getSyncMlogPeriodInMs() == 0);
+    initLogWriter();
   }
 
   public static ISchemaFile initSchemaFile(String sgName, SchemaRegionId schemaRegionId)
@@ -903,6 +900,7 @@ public class SchemaFile implements ISchemaFile {
       logWriter.close();
       logFile.delete();
       logFile = SystemFileFactory.INSTANCE.getFile(logFile.toURI());
+      initLogWriter();
     }
   }
 
@@ -917,6 +915,7 @@ public class SchemaFile implements ISchemaFile {
     DataInputStream logReader =
         new DataInputStream(new BufferedInputStream(new FileInputStream(logFile)));
     CRC32 checkSummer = new CRC32();
+    boolean redo = false;
     byte[] readLog;
 
     dirtyPageTable.clear();
@@ -947,8 +946,9 @@ public class SchemaFile implements ISchemaFile {
       if (pageIndex == LOG_COMMIT_TOKEN) {
         // all logs above have been completed
         dirtyPageTable.clear();
+        redo = false;
       } else if (pageIndex == LOG_PREPARE_TOKEN) {
-        // do nothing
+        redo = true;
       } else {
         // init page as dirty
         readBuffer.clear();
@@ -956,8 +956,19 @@ public class SchemaFile implements ISchemaFile {
       }
     }
 
-    logReader.close();
-    flushDirtyPages();
+    if (redo) {
+      logReader.close();
+      flushDirtyPages();
+
+      // mark as commited
+      initLogWriter();
+
+      ByteBuffer commitBuffer = ByteBuffer.allocate(4);
+      ReadWriteIOUtils.write(LOG_COMMIT_TOKEN, commitBuffer);
+      logWriter.write(commitBuffer);
+      logWriter.force();
+      logWriter.close();
+    }
   }
 
   private void flushDirtyPages() throws IOException {
@@ -967,6 +978,12 @@ public class SchemaFile implements ISchemaFile {
       logBuffer.flip();
       channel.write(logBuffer, getPageAddress(page.getPageIndex()));
     }
+  }
+
+  private void initLogWriter() throws IOException {
+    logWriter =
+        new LogWriter(
+            logFile, IoTDBDescriptor.getInstance().getConfig().getSyncMlogPeriodInMs() == 0);
   }
 
   // endregion
