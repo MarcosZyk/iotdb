@@ -908,7 +908,7 @@ public class SchemaFile implements ISchemaFile {
    * Works as an imitation of {@link SingleFileLogReader}, but less complicated with log content.
    */
   private synchronized void initFromSchemaLog() throws IOException {
-    if (!logFile.exists()) {
+    if (!logFile.exists() || !USE_SCHEMA_LOG) {
       return;
     }
 
