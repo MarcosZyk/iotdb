@@ -21,7 +21,7 @@ package org.apache.iotdb.db.metadata.mtree.traverser;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.metadata.mnode.IMNode;
-import org.apache.iotdb.db.metadata.mnode.IMNodeIterator;
+import org.apache.iotdb.db.metadata.mnode.iterator.IMNodeIterator;
 import org.apache.iotdb.db.metadata.mtree.store.IMTreeStore;
 import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.metadata.template.Template;
@@ -85,8 +85,8 @@ public abstract class Traverser {
     this.startNode = startNode;
     this.nodes = nodes;
     this.store = store;
-    initStartIndexAndLevel(path);
     this.traverseContext = new ArrayDeque<>();
+    initStartIndexAndLevel(path);
   }
 
   /**
@@ -101,6 +101,8 @@ public abstract class Traverser {
     startLevel = 0;
     while (parent != null) {
       startLevel++;
+      traverseContext.addLast(parent);
+
       ancestors.push(parent);
       parent = parent.getParent();
     }
@@ -446,11 +448,7 @@ public abstract class Traverser {
       nodeNames.add(nodes.next().getName());
     }
 
-    if (nodeNames.isEmpty()) {
-      nodeNames.addAll(Arrays.asList(currentNode.getPartialPath().getNodes()));
-    } else {
-      nodeNames.add(currentNode.getName());
-    }
+    nodeNames.add(currentNode.getName());
 
     return nodeNames.toArray(new String[0]);
   }

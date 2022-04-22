@@ -18,6 +18,8 @@
  */
 package org.apache.iotdb.db.mpp.sql.planner.plan.node;
 
+import org.apache.commons.lang.Validate;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -26,6 +28,9 @@ import static java.util.Objects.requireNonNull;
 /** The base class of query executable operators, which is used to compose logical query plan. */
 // TODO: consider how to restrict the children type for each type of ExecOperator
 public abstract class PlanNode {
+  protected static final int NO_CHILD_ALLOWED = 0;
+  protected static final int ONE_CHILD = 1;
+  protected static final int CHILD_COUNT_NO_LIMIT = -1;
 
   private PlanNodeId id;
 
@@ -34,19 +39,40 @@ public abstract class PlanNode {
     this.id = id;
   }
 
-  public PlanNodeId getId() {
+  public PlanNodeId getPlanNodeId() {
     return id;
+  }
+
+  public void setPlanNodeId(PlanNodeId id) {
+    this.id = id;
   }
 
   public abstract List<PlanNode> getChildren();
 
-  public abstract void addChildren(PlanNode child);
+  public abstract void addChild(PlanNode child);
 
   public abstract PlanNode clone();
 
-  public abstract PlanNode cloneWithChildren(List<PlanNode> children);
+  public PlanNode cloneWithChildren(List<PlanNode> children) {
+    Validate.isTrue(
+        children == null
+            || allowedChildCount() == CHILD_COUNT_NO_LIMIT
+            || children.size() == allowedChildCount(),
+        String.format(
+            "Child count is not correct for PlanNode. Expected: %d, Value: %d",
+            allowedChildCount(), getChildrenCount(children)));
+    PlanNode node = clone();
+    if (children != null) {
+      children.forEach(node::addChild);
+    }
+    return node;
+  }
 
-  public abstract List<String> getOutputColumnNames();
+  private int getChildrenCount(List<PlanNode> children) {
+    return children == null ? 0 : children.size();
+  }
+
+  public abstract int allowedChildCount();
 
   public <R, C> R accept(PlanVisitor<R, C> visitor, C context) {
     return visitor.visitPlan(this, context);

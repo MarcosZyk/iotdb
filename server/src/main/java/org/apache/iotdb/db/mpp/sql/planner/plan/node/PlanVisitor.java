@@ -29,10 +29,15 @@ import org.apache.iotdb.db.mpp.sql.planner.plan.node.process.LimitNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.process.OffsetNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.process.SortNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.process.TimeJoinNode;
+import org.apache.iotdb.db.mpp.sql.planner.plan.node.sink.FragmentSinkNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.source.SeriesAggregateScanNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.source.SeriesScanNode;
 
 public abstract class PlanVisitor<R, C> {
+
+  public R process(PlanNode node, C context) {
+    return node.accept(this, context);
+  }
 
   public abstract R visitPlan(PlanNode node, C context);
 
@@ -85,6 +90,10 @@ public abstract class PlanVisitor<R, C> {
   }
 
   public R visitExchange(ExchangeNode node, C context) {
+    return visitPlan(node, context);
+  }
+
+  public R visitFragmentSink(FragmentSinkNode node, C context) {
     return visitPlan(node, context);
   }
 }

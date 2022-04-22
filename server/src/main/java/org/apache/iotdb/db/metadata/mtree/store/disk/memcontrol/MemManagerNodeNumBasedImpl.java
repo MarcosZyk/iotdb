@@ -22,77 +22,84 @@ import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.metadata.mnode.IMNode;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
+// This class is used for memory control in dev and debug environment.
 public class MemManagerNodeNumBasedImpl implements IMemManager {
 
   private int capacity;
 
-  private volatile int size;
+  private final AtomicInteger size = new AtomicInteger(0);
 
-  private volatile int pinnedSize;
+  private final AtomicInteger pinnedSize = new AtomicInteger(0);
 
   MemManagerNodeNumBasedImpl() {}
 
   @Override
   public void init() {
-    capacity = IoTDBDescriptor.getInstance().getConfig().getCachedMetadataSizeInPersistentMode();
+    capacity = IoTDBDescriptor.getInstance().getConfig().getCachedMNodeSizeInSchemaFileMode();
   }
 
   @Override
-  public synchronized boolean isEmpty() {
-    return size == 0;
+  public boolean isEmpty() {
+    return size.get() == 0;
   }
 
   @Override
-  public synchronized boolean isExceedThreshold() {
-    return !isEmpty() && size + pinnedSize > capacity * 0.6;
+  public boolean isExceedReleaseThreshold() {
+    return size.get() + pinnedSize.get() > capacity * 0.6;
   }
 
   @Override
-  public synchronized boolean isExceedCapacity() {
-    return size + pinnedSize > capacity;
+  public boolean isExceedFlushThreshold() {
+    return size.get() + pinnedSize.get() > capacity;
   }
 
   @Override
-  public synchronized void requestPinnedMemResource(IMNode node) {
-    pinnedSize++;
+  public void requestPinnedMemResource(IMNode node) {
+    pinnedSize.getAndIncrement();
   }
 
   @Override
-  public synchronized void upgradeMemResource(IMNode node) {
-    pinnedSize++;
-    size--;
+  public void upgradeMemResource(IMNode node) {
+    pinnedSize.getAndIncrement();
+    size.getAndDecrement();
   }
 
   @Override
-  public synchronized void releasePinnedMemResource(IMNode node) {
-    pinnedSize--;
-    size++;
+  public void releasePinnedMemResource(IMNode node) {
+    size.getAndIncrement();
+    pinnedSize.getAndDecrement();
   }
 
   @Override
-  public synchronized void releaseMemResource(IMNode node) {
-    size--;
+  public void releaseMemResource(IMNode node) {
+    size.getAndDecrement();
   }
 
   @Override
-  public synchronized void releaseMemResource(List<IMNode> evictedNodes) {
-    size -= evictedNodes.size();
+  public void releaseMemResource(List<IMNode> evictedNodes) {
+    size.getAndUpdate(value -> value -= evictedNodes.size());
   }
 
   @Override
-  public synchronized void clear() {
-    size = 0;
-    pinnedSize = 0;
+  public void updatePinnedSize(int deltaSize) {
+    // do nothing
   }
 
   @Override
-  public int getPinnedSize() {
-    return pinnedSize;
+  public void clear() {
+    size.getAndSet(0);
+    pinnedSize.getAndSet(0);
   }
 
   @Override
-  public int getCachedSize() {
-    return size;
+  public long getPinnedSize() {
+    return pinnedSize.get();
+  }
+
+  @Override
+  public long getCachedSize() {
+    return size.get();
   }
 }

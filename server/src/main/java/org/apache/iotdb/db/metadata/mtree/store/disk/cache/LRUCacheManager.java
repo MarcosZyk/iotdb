@@ -37,7 +37,8 @@ public class LRUCacheManager extends CacheManager {
 
   @Override
   public void updateCacheStatusAfterAccess(CacheEntry cacheEntry) {
-    getTargetCacheList(cacheEntry).updateCacheStatusAfterAccess(getAsLRUCacheEntry(cacheEntry));
+    LRUCacheEntry lruCacheEntry = getAsLRUCacheEntry(cacheEntry);
+    getTargetCacheList(lruCacheEntry).updateCacheStatusAfterAccess(lruCacheEntry);
   }
 
   // MNode update operation like node replace may reset the mapping between cacheEntry and node,
@@ -49,24 +50,26 @@ public class LRUCacheManager extends CacheManager {
 
   @Override
   protected void initCacheEntryForNode(IMNode node) {
-    LRUCacheEntry cacheEntry = new LRUCacheEntry();
+    LRUCacheEntry cacheEntry = new LRUCacheEntry(node);
     node.setCacheEntry(cacheEntry);
-    cacheEntry.setNode(node);
   }
 
   @Override
   protected boolean isInNodeCache(CacheEntry cacheEntry) {
-    return getTargetCacheList(cacheEntry).isInCacheList(getAsLRUCacheEntry(cacheEntry));
+    LRUCacheEntry lruCacheEntry = getAsLRUCacheEntry(cacheEntry);
+    return getTargetCacheList(lruCacheEntry).isInCacheList(lruCacheEntry);
   }
 
   @Override
   protected void addToNodeCache(CacheEntry cacheEntry, IMNode node) {
-    getTargetCacheList(cacheEntry).addToCacheList(getAsLRUCacheEntry(cacheEntry), node);
+    LRUCacheEntry lruCacheEntry = getAsLRUCacheEntry(cacheEntry);
+    getTargetCacheList(lruCacheEntry).addToCacheList(lruCacheEntry, node);
   }
 
   @Override
   protected void removeFromNodeCache(CacheEntry cacheEntry) {
-    getTargetCacheList(cacheEntry).removeFromCacheList(getAsLRUCacheEntry(cacheEntry));
+    LRUCacheEntry lruCacheEntry = getAsLRUCacheEntry(cacheEntry);
+    getTargetCacheList(lruCacheEntry).removeFromCacheList(lruCacheEntry);
   }
 
   @Override
@@ -92,21 +95,28 @@ public class LRUCacheManager extends CacheManager {
     return (LRUCacheEntry) cacheEntry;
   }
 
-  private LRUCacheList getTargetCacheList(CacheEntry cacheEntry) {
-    return lruCacheLists[getCacheListLoc(cacheEntry)];
+  private LRUCacheList getTargetCacheList(LRUCacheEntry lruCacheEntry) {
+    return lruCacheLists[getCacheListLoc(lruCacheEntry)];
   }
 
-  private int getCacheListLoc(CacheEntry cacheEntry) {
-    return cacheEntry.hashCode() % NUM_OF_LIST;
+  private int getCacheListLoc(LRUCacheEntry lruCacheEntry) {
+    int hash = lruCacheEntry.hashCode() % NUM_OF_LIST;
+    return hash < 0 ? hash + NUM_OF_LIST : hash;
   }
 
   private static class LRUCacheEntry extends CacheEntry {
 
+    // although the node instance may be replaced, the name and full path of the node won't be
+    // changed, which means the cacheEntry always map to only one logic node
     protected volatile IMNode node;
 
     private volatile LRUCacheEntry pre = null;
 
     private volatile LRUCacheEntry next = null;
+
+    public LRUCacheEntry(IMNode node) {
+      this.node = node;
+    }
 
     public IMNode getNode() {
       return node;
@@ -130,6 +140,11 @@ public class LRUCacheManager extends CacheManager {
 
     void setNext(LRUCacheEntry next) {
       this.next = next;
+    }
+
+    @Override
+    public int hashCode() {
+      return node.getName().hashCode();
     }
   }
 

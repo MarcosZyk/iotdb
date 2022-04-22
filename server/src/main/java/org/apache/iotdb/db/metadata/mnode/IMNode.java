@@ -19,6 +19,7 @@
 package org.apache.iotdb.db.metadata.mnode;
 
 import org.apache.iotdb.db.metadata.logfile.MLogWriter;
+import org.apache.iotdb.db.metadata.mnode.container.IMNodeContainer;
 import org.apache.iotdb.db.metadata.mtree.store.disk.cache.CacheEntry;
 import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.metadata.template.Template;
@@ -51,7 +52,7 @@ public interface IMNode extends Serializable {
 
   IMNode addChild(IMNode child);
 
-  void deleteChild(String name);
+  IMNode deleteChild(String name);
 
   // this method will replace the oldChild with the newChild, the data of oldChild will be moved to
   // newChild

@@ -28,9 +28,9 @@ public interface IMemManager {
 
   boolean isEmpty();
 
-  boolean isExceedThreshold();
+  boolean isExceedReleaseThreshold();
 
-  boolean isExceedCapacity();
+  boolean isExceedFlushThreshold();
 
   void requestPinnedMemResource(IMNode node);
 
@@ -42,9 +42,11 @@ public interface IMemManager {
 
   void releaseMemResource(List<IMNode> evictedNodes);
 
+  void updatePinnedSize(int deltaSize);
+
   void clear();
 
-  int getPinnedSize();
+  long getPinnedSize();
 
-  int getCachedSize();
+  long getCachedSize();
 }

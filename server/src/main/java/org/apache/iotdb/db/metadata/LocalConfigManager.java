@@ -21,7 +21,7 @@ package org.apache.iotdb.db.metadata;
 
 import org.apache.iotdb.commons.concurrent.IoTDBThreadPoolFactory;
 import org.apache.iotdb.commons.conf.IoTDBConstant;
-import org.apache.iotdb.commons.partition.SchemaRegionId;
+import org.apache.iotdb.commons.consensus.SchemaRegionId;
 import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.engine.fileSystem.SystemFileFactory;
@@ -32,7 +32,7 @@ import org.apache.iotdb.db.exception.metadata.StorageGroupNotSetException;
 import org.apache.iotdb.db.exception.metadata.template.UndefinedTemplateException;
 import org.apache.iotdb.db.metadata.mnode.IStorageGroupMNode;
 import org.apache.iotdb.db.metadata.path.PartialPath;
-import org.apache.iotdb.db.metadata.rescon.MetadataResourceManager;
+import org.apache.iotdb.db.metadata.rescon.SchemaResourceManager;
 import org.apache.iotdb.db.metadata.schemaregion.SchemaEngine;
 import org.apache.iotdb.db.metadata.schemaregion.SchemaRegion;
 import org.apache.iotdb.db.metadata.storagegroup.IStorageGroupSchemaManager;
@@ -117,7 +117,7 @@ public class LocalConfigManager {
     }
 
     try {
-      MetadataResourceManager.initMetadataResource();
+      SchemaResourceManager.initSchemaResource();
 
       templateManager.init();
       storageGroupSchemaManager.init();
@@ -174,7 +174,12 @@ public class LocalConfigManager {
     }
 
     try {
-      MetadataResourceManager.clearMetadataResource();
+      SchemaResourceManager.clearSchemaResource();
+
+      if (timedForceMLogThread != null) {
+        timedForceMLogThread.shutdownNow();
+        timedForceMLogThread = null;
+      }
 
       partitionTable.clear();
 
@@ -186,10 +191,6 @@ public class LocalConfigManager {
       storageGroupSchemaManager.clear();
       templateManager.clear();
 
-      if (timedForceMLogThread != null) {
-        timedForceMLogThread.shutdownNow();
-        timedForceMLogThread = null;
-      }
     } catch (IOException e) {
       logger.error("Error occurred when clearing LocalConfigManager:", e);
     }
@@ -197,7 +198,7 @@ public class LocalConfigManager {
     initialized = false;
   }
 
-  public void forceMlog() {
+  public synchronized void forceMlog() {
     if (!initialized) {
       return;
     }
@@ -237,13 +238,21 @@ public class LocalConfigManager {
   }
 
   public void deleteStorageGroup(PartialPath storageGroup) throws MetadataException {
-    storageGroupSchemaManager.deleteStorageGroup(storageGroup);
     deleteSchemaRegionsInStorageGroup(
-        storageGroup, partitionTable.deleteStorageGroup(storageGroup));
+        storageGroup, partitionTable.getSchemaRegionIdsByStorageGroup(storageGroup));
+
+    for (Template template : templateManager.getTemplateMap().values()) {
+      templateManager.unmarkStorageGroup(template, storageGroup.getFullPath());
+    }
 
     if (!config.isEnableMemControl()) {
       MemTableManager.getInstance().addOrDeleteStorageGroup(-1);
     }
+
+    partitionTable.deleteStorageGroup(storageGroup);
+
+    // delete storage group after all related resources have been cleared
+    storageGroupSchemaManager.deleteStorageGroup(storageGroup);
   }
 
   /**
@@ -422,25 +431,24 @@ public class LocalConfigManager {
   }
 
   /**
-   * To calculate the count of nodes in the given level for given path pattern. If using prefix
-   * match, the path pattern is used to match prefix path. All nodes start with the matched prefix
-   * path will be counted. This method only count in nodes above storage group. Nodes below storage
-   * group, including storage group node will be counted by certain Storage Group. The involved
-   * storage groups will be collected to count nodes below storage group.
+   * To collect nodes in the given level for given path pattern. If using prefix match, the path
+   * pattern is used to match prefix path. All nodes start with the matched prefix path will be
+   * collected. This method only count in nodes above storage group. Nodes below storage group,
+   * including storage group node will be collected by certain SchemaRegion. The involved storage
+   * groups will be collected to fetch schemaRegion.
    *
    * @param pathPattern a path pattern or a full path
-   * @param level the level should match the level of the path
+   * @param nodeLevel the level should match the level of the path
    * @param isPrefixMatch if true, the path pattern is used to match prefix path
    */
-  public Pair<Integer, Set<PartialPath>> getNodesCountInGivenLevel(
-      PartialPath pathPattern, int level, boolean isPrefixMatch) throws MetadataException {
-    return storageGroupSchemaManager.getNodesCountInGivenLevel(pathPattern, level, isPrefixMatch);
-  }
-
   public Pair<List<PartialPath>, Set<PartialPath>> getNodesListInGivenLevel(
-      PartialPath pathPattern, int nodeLevel, LocalSchemaProcessor.StorageGroupFilter filter)
+      PartialPath pathPattern,
+      int nodeLevel,
+      boolean isPrefixMatch,
+      LocalSchemaProcessor.StorageGroupFilter filter)
       throws MetadataException {
-    return storageGroupSchemaManager.getNodesListInGivenLevel(pathPattern, nodeLevel, filter);
+    return storageGroupSchemaManager.getNodesListInGivenLevel(
+        pathPattern, nodeLevel, isPrefixMatch, filter);
   }
 
   /**
@@ -508,8 +516,7 @@ public class LocalConfigManager {
     partitionTable.putSchemaRegionId(storageGroup, schemaRegionId);
   }
 
-  public SchemaRegion getSchemaRegion(PartialPath storageGroup, SchemaRegionId schemaRegionId)
-      throws MetadataException {
+  public SchemaRegion getSchemaRegion(SchemaRegionId schemaRegionId) {
     return schemaEngine.getSchemaRegion(schemaRegionId);
   }
 
@@ -777,5 +784,4 @@ public class LocalConfigManager {
   }
 
   // endregion
-
 }

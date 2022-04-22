@@ -18,7 +18,7 @@
  */
 package org.apache.iotdb.db.metadata.template;
 
-import org.apache.iotdb.commons.partition.SchemaRegionId;
+import org.apache.iotdb.commons.consensus.SchemaRegionId;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.metadata.PathNotExistException;
@@ -448,6 +448,10 @@ public class Template {
     if (schemaRegionIds.isEmpty()) {
       relatedSchemaRegion.remove(storageGroup);
     }
+  }
+
+  public void unmarkStorageGroup(String storageGroup) {
+    relatedSchemaRegion.remove(storageGroup);
   }
 
   // endregion

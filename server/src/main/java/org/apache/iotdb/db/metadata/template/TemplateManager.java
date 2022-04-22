@@ -19,7 +19,7 @@
 package org.apache.iotdb.db.metadata.template;
 
 import org.apache.iotdb.commons.conf.IoTDBConstant;
-import org.apache.iotdb.commons.partition.SchemaRegionId;
+import org.apache.iotdb.commons.consensus.SchemaRegionId;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.metadata.template.DuplicatedTemplateException;
@@ -357,6 +357,13 @@ public class TemplateManager {
       }
     }
     template.unmarkSchemaRegion(storageGroup, schemaRegionId);
+  }
+
+  public void unmarkStorageGroup(Template template, String storageGroup) {
+    synchronized (templateUsageInStorageGroup) {
+      templateUsageInStorageGroup.remove(storageGroup);
+    }
+    template.unmarkStorageGroup(storageGroup);
   }
 
   public void forceLog() {

@@ -26,10 +26,11 @@ import org.apache.iotdb.db.metadata.mtree.store.disk.memcontrol.IMemManager;
 import org.apache.iotdb.db.metadata.mtree.store.disk.memcontrol.MemManagerHolder;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import static org.apache.iotdb.db.metadata.mtree.store.disk.ICachedMNodeContainer.getBelongedContainer;
 import static org.apache.iotdb.db.metadata.mtree.store.disk.ICachedMNodeContainer.getCachedMNodeContainer;
@@ -66,11 +67,10 @@ public abstract class CacheManager implements ICacheManager {
   private IMemManager memManager = MemManagerHolder.getMemManagerInstance();
 
   // The nodeBuffer helps to quickly locate the volatile subtree
-  private volatile Map<CacheEntry, IMNode> nodeBuffer = new ConcurrentHashMap<>();
+  private NodeBuffer nodeBuffer = new NodeBuffer();
 
   public void initRootStatus(IMNode root) {
-    initCacheEntryForNode(root);
-    doPin(root);
+    pinMNodeWithMemStatusUpdate(root);
   }
 
   /**
@@ -122,7 +122,44 @@ public abstract class CacheManager implements ICacheManager {
     CacheEntry cacheEntry = getCacheEntry(node);
     cacheEntry.setVolatile(true);
     getBelongedContainer(node).appendMNode(node);
-    addNodeToBuffer(node);
+    addToBufferAfterAppend(node);
+  }
+
+  /**
+   * look for the first none volatile ancestor of this node and add it to nodeBuffer. Through this
+   * the volatile subtree the given node belong to will be record in nodeBuffer.
+   *
+   * @param node
+   */
+  private void addToBufferAfterAppend(IMNode node) {
+    removeAncestorsFromCache(node);
+    IMNode parent = node.getParent();
+    CacheEntry cacheEntry = getCacheEntry(parent);
+    if (!cacheEntry.isVolatile()) {
+      // the cacheEntry may be set to volatile concurrently, the unVolatile node should not be added
+      // to nodeBuffer, which prevent the duplicated collecting on subTree
+      synchronized (cacheEntry) {
+        if (!cacheEntry.isVolatile()) {
+          nodeBuffer.put(cacheEntry, parent);
+        }
+      }
+    }
+  }
+
+  /**
+   * The ancestors of volatile node should not stay in nodeCache in which the node will be evicted.
+   * When invoking this method, all the ancestors have been pinned.
+   */
+  private void removeAncestorsFromCache(IMNode node) {
+    IMNode parent = node.getParent();
+    IMNode current = node;
+    CacheEntry cacheEntry = getCacheEntry(parent);
+    while (!current.isStorageGroup() && isInNodeCache(cacheEntry)) {
+      removeFromNodeCache(cacheEntry);
+      current = parent;
+      parent = parent.getParent();
+      cacheEntry = getCacheEntry(parent);
+    }
   }
 
   /**
@@ -135,13 +172,16 @@ public abstract class CacheManager implements ICacheManager {
   public void updateCacheStatusAfterUpdate(IMNode node) {
     CacheEntry cacheEntry = getCacheEntry(node);
     if (!cacheEntry.isVolatile()) {
-      cacheEntry.setVolatile(true);
+      synchronized (cacheEntry) {
+        // the status change affects the subTre collect in nodeBuffer
+        cacheEntry.setVolatile(true);
+      }
       getBelongedContainer(node).updateMNode(node.getName());
       // MNode update operation like node replace may reset the mapping between cacheEntry and node,
       // thus it should be updated
       updateCacheStatusAfterUpdate(cacheEntry, node);
       removeFromNodeCache(cacheEntry);
-      addNodeToBuffer(node);
+      addToBufferAfterUpdate(node);
     }
   }
 
@@ -151,31 +191,32 @@ public abstract class CacheManager implements ICacheManager {
    *
    * @param node
    */
-  private void addNodeToBuffer(IMNode node) {
-    IMNode parent = node.getParent();
-    IMNode current = node;
-    CacheEntry cacheEntry = getCacheEntry(parent);
-    while (!current.isStorageGroup() && isInNodeCache(cacheEntry)) {
-      /*
-      The ancestors of volatile node should not stay in nodeCache in which the node will be
-      evicted. When invoking this method, all the ancestors have been pinned.
-      */
-      removeFromNodeCache(cacheEntry);
-      current = parent;
-      parent = parent.getParent();
-      cacheEntry = getCacheEntry(parent);
+  private void addToBufferAfterUpdate(IMNode node) {
+    if (node.isStorageGroup()) {
+      nodeBuffer.put(getCacheEntry(node), node);
+      return;
     }
-    parent = node.getParent();
-    cacheEntry = getCacheEntry(parent);
-    if (nodeBuffer.containsKey(cacheEntry)) {
-      nodeBuffer.remove(getCacheEntry(node));
-    } else if (!cacheEntry.isVolatile()) {
+
+    removeAncestorsFromCache(node);
+    IMNode parent = node.getParent();
+    CacheEntry cacheEntry = getCacheEntry(parent);
+
+    /*
+     * The updated node may already exist in nodeBuffer, remove it and ensure
+     * the volatile subtree it belongs to is in nodeBuffer
+     */
+    if (!cacheEntry.isVolatile()) {
       // make sure that the nodeBuffer contains all the root node of volatile subTree
       // give that root.sg.d.s, if sg and d have been persisted and s are volatile, then d
       // will be added to nodeBuffer
-      nodeBuffer.put(cacheEntry, parent);
-      nodeBuffer.remove(getCacheEntry(node));
+      synchronized (cacheEntry) {
+        if (!cacheEntry.isVolatile()) {
+          nodeBuffer.put(cacheEntry, parent);
+        }
+      }
     }
+
+    nodeBuffer.remove(getCacheEntry(node));
   }
 
   /**
@@ -220,58 +261,53 @@ public abstract class CacheManager implements ICacheManager {
   @Override
   public List<IMNode> collectVolatileMNodes() {
     List<IMNode> nodesToPersist = new ArrayList<>();
-    for (IMNode node : nodeBuffer.values()) {
-      collectVolatileNodes(node, nodesToPersist);
-    }
+    nodeBuffer.forEachNode(node -> collectVolatileNodes(node, nodesToPersist));
     nodeBuffer.clear();
     return nodesToPersist;
   }
 
   private void collectVolatileNodes(IMNode node, List<IMNode> nodesToPersist) {
-    CacheEntry cacheEntry;
-    boolean isCollected = false;
-    for (IMNode child : node.getChildren().values()) {
-      cacheEntry = getCacheEntry(child);
-      if (cacheEntry == null || !cacheEntry.isVolatile()) {
-        continue;
-      }
-      if (!isCollected) {
-        nodesToPersist.add(node);
-        isCollected = true;
-      }
+    Iterator<IMNode> bufferIterator = getCachedMNodeContainer(node).getChildrenBufferIterator();
+
+    if (bufferIterator.hasNext()) {
+      nodesToPersist.add(node);
+    }
+
+    IMNode child;
+    while (bufferIterator.hasNext()) {
+      child = bufferIterator.next();
       collectVolatileNodes(child, nodesToPersist);
     }
   }
 
   @Override
   public void remove(IMNode node) {
-    List<IMNode> removedMNodes = new LinkedList<>();
-    removeRecursively(node, removedMNodes);
-    for (IMNode removedMNode : removedMNodes) {
-      if (getCacheEntry(removedMNode).isPinned()) {
-        memManager.releasePinnedMemResource(removedMNode);
-      }
-      memManager.releaseMemResource(removedMNode);
-    }
+    removeRecursively(node);
   }
 
-  private void removeOne(CacheEntry cacheEntry) {
+  private void removeOne(CacheEntry cacheEntry, IMNode node) {
     if (cacheEntry.isVolatile()) {
       nodeBuffer.remove(cacheEntry);
     } else {
       removeFromNodeCache(cacheEntry);
     }
+
+    node.setCacheEntry(null);
+
+    if (cacheEntry.isPinned()) {
+      memManager.releasePinnedMemResource(node);
+    }
+    memManager.releaseMemResource(node);
   }
 
-  private void removeRecursively(IMNode node, List<IMNode> removedMNodes) {
+  private void removeRecursively(IMNode node) {
     CacheEntry cacheEntry = getCacheEntry(node);
     if (cacheEntry == null) {
       return;
     }
-    removeOne(cacheEntry);
-    removedMNodes.add(node);
+    removeOne(cacheEntry, node);
     for (IMNode child : node.getChildren().values()) {
-      removeRecursively(child, removedMNodes);
+      removeRecursively(child);
     }
   }
 
@@ -386,10 +422,10 @@ public abstract class CacheManager implements ICacheManager {
    * @return
    */
   @Override
-  public void unPinMNode(IMNode node) {
+  public boolean unPinMNode(IMNode node) {
     CacheEntry cacheEntry = getCacheEntry(node);
     if (cacheEntry == null) {
-      return;
+      return false;
     }
     cacheEntry.unPin();
     if (!cacheEntry.isPinned()) {
@@ -403,15 +439,36 @@ public abstract class CacheManager implements ICacheManager {
         if (cacheEntry.isPinned()) {
           break;
         }
-        memManager.releasePinnedMemResource(parent);
+        memManager.releasePinnedMemResource(node);
       }
+      return true;
+    } else {
+      return false;
     }
   }
 
   @Override
-  public void clear() {
+  public void clear(IMNode root) {
+    clearMNodeInMemory(root);
     clearNodeCache();
     nodeBuffer.clear();
+  }
+
+  private void clearMNodeInMemory(IMNode node) {
+    CacheEntry cacheEntry = getCacheEntry(node);
+    if (cacheEntry == null) {
+      return;
+    }
+
+    if (cacheEntry.isPinned()) {
+      memManager.releasePinnedMemResource(node);
+    }
+    memManager.releaseMemResource(node);
+
+    Iterator<IMNode> iterator = getCachedMNodeContainer(node).getChildrenIterator();
+    while (iterator.hasNext()) {
+      clearMNodeInMemory(iterator.next());
+    }
   }
 
   protected CacheEntry getCacheEntry(IMNode node) {
@@ -437,4 +494,44 @@ public abstract class CacheManager implements ICacheManager {
   protected abstract IMNode getPotentialNodeTobeEvicted();
 
   protected abstract void clearNodeCache();
+
+  private static class NodeBuffer {
+
+    private static final int MAP_NUM = 17;
+
+    private Map<CacheEntry, IMNode>[] maps = new Map[MAP_NUM];
+
+    NodeBuffer() {
+      for (int i = 0; i < MAP_NUM; i++) {
+        maps[i] = new ConcurrentHashMap<>();
+      }
+    }
+
+    void put(CacheEntry cacheEntry, IMNode node) {
+      maps[getLoc(cacheEntry)].put(cacheEntry, node);
+    }
+
+    void remove(CacheEntry cacheEntry) {
+      maps[getLoc(cacheEntry)].remove(cacheEntry);
+    }
+
+    void forEachNode(Consumer<IMNode> action) {
+      for (Map<CacheEntry, IMNode> map : maps) {
+        for (IMNode node : map.values()) {
+          action.accept(node);
+        }
+      }
+    }
+
+    void clear() {
+      for (Map<CacheEntry, IMNode> map : maps) {
+        map.clear();
+      }
+    }
+
+    private int getLoc(CacheEntry cacheEntry) {
+      int hash = cacheEntry.hashCode() % MAP_NUM;
+      return hash < 0 ? hash + MAP_NUM : hash;
+    }
+  }
 }

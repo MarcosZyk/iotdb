@@ -18,6 +18,7 @@
  */
 package org.apache.iotdb.db.mpp.sql.planner.plan.node.write;
 
+import org.apache.iotdb.commons.partition.RegionReplicaSet;
 import org.apache.iotdb.db.metadata.idtable.entry.IDeviceID;
 import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.mpp.sql.analyze.Analysis;
@@ -38,7 +39,8 @@ public abstract class InsertNode extends PlanNode {
   protected PartialPath devicePath;
 
   protected boolean isAligned;
-  protected MeasurementSchema[] measurements;
+  protected MeasurementSchema[] measurementSchemas;
+  protected String[] measurements;
   protected TSDataType[] dataTypes;
   // TODO(INSERT) need to change it to a function handle to update last time value
   //  protected IMeasurementMNode[] measurementMNodes;
@@ -49,17 +51,87 @@ public abstract class InsertNode extends PlanNode {
    */
   protected IDeviceID deviceID;
 
+  /** Physical address of data region after splitting */
+  RegionReplicaSet dataRegionReplicaSet;
+
   protected InsertNode(PlanNodeId id) {
     super(id);
+  }
+
+  protected InsertNode(
+      PlanNodeId id,
+      PartialPath devicePath,
+      boolean isAligned,
+      MeasurementSchema[] measurementSchemas,
+      TSDataType[] dataTypes) {
+    super(id);
+    this.devicePath = devicePath;
+    this.isAligned = isAligned;
+    this.measurementSchemas = measurementSchemas;
+    this.dataTypes = dataTypes;
+  }
+
+  public RegionReplicaSet getDataRegionReplicaSet() {
+    return dataRegionReplicaSet;
+  }
+
+  public void setDataRegionReplicaSet(RegionReplicaSet dataRegionReplicaSet) {
+    this.dataRegionReplicaSet = dataRegionReplicaSet;
+  }
+
+  public PartialPath getDevicePath() {
+    return devicePath;
+  }
+
+  public void setDevicePath(PartialPath devicePath) {
+    this.devicePath = devicePath;
+  }
+
+  public boolean isAligned() {
+    return isAligned;
+  }
+
+  public void setAligned(boolean aligned) {
+    isAligned = aligned;
+  }
+
+  public MeasurementSchema[] getMeasurementSchemas() {
+    return measurementSchemas;
+  }
+
+  public void setMeasurementSchemas(MeasurementSchema[] measurementSchemas) {
+    this.measurementSchemas = measurementSchemas;
+  }
+
+  public String[] getMeasurements() {
+    if (measurements == null) {
+      measurements = new String[measurementSchemas.length];
+      for (int i = 0; i < measurementSchemas.length; i++) {
+        measurements[i] = measurementSchemas[i].getMeasurementId();
+      }
+    }
+    return measurements;
+  }
+
+  public TSDataType[] getDataTypes() {
+    return dataTypes;
+  }
+
+  public void setDataTypes(TSDataType[] dataTypes) {
+    this.dataTypes = dataTypes;
+  }
+
+  public IDeviceID getDeviceID() {
+    return deviceID;
+  }
+
+  public void setDeviceID(IDeviceID deviceID) {
+    this.deviceID = deviceID;
   }
 
   // TODO(INSERT) split this insert node into multiple InsertNode according to the data partition
   // info
   public abstract List<InsertNode> splitByPartition(Analysis analysis);
-
-  public boolean needSplit() {
-    return true;
-  }
 
   @Override
   public void serialize(ByteBuffer byteBuffer) {}

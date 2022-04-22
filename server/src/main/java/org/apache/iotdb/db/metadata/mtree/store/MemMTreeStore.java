@@ -20,16 +20,27 @@ package org.apache.iotdb.db.metadata.mtree.store;
 
 import org.apache.iotdb.commons.conf.IoTDBConstant;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
+import org.apache.iotdb.db.metadata.mnode.IEntityMNode;
 import org.apache.iotdb.db.metadata.mnode.IMNode;
-import org.apache.iotdb.db.metadata.mnode.IMNodeIterator;
-import org.apache.iotdb.db.metadata.mnode.IStorageGroupMNode;
+import org.apache.iotdb.db.metadata.mnode.IMeasurementMNode;
 import org.apache.iotdb.db.metadata.mnode.InternalMNode;
-import org.apache.iotdb.db.metadata.mnode.MemMNodeIterator;
+import org.apache.iotdb.db.metadata.mnode.MNodeUtils;
 import org.apache.iotdb.db.metadata.mnode.StorageGroupMNode;
+import org.apache.iotdb.db.metadata.mnode.estimator.BasicMNodSizeEstimator;
+import org.apache.iotdb.db.metadata.mnode.estimator.IMNodeSizeEstimator;
+import org.apache.iotdb.db.metadata.mnode.iterator.IMNodeIterator;
+import org.apache.iotdb.db.metadata.mnode.iterator.MNodeIterator;
 import org.apache.iotdb.db.metadata.path.PartialPath;
+import org.apache.iotdb.db.metadata.rescon.MemoryStatistics;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 /** This is a memory-based implementation of IMTreeStore. All MNodes are stored in memory. */
 public class MemMTreeStore implements IMTreeStore {
+
+  private MemoryStatistics memoryStatistics = MemoryStatistics.getInstance();
+  private IMNodeSizeEstimator estimator = new BasicMNodSizeEstimator();
+  private AtomicLong localMemoryUsage = new AtomicLong(0);
 
   private IMNode root;
 
@@ -62,24 +73,74 @@ public class MemMTreeStore implements IMTreeStore {
 
   @Override
   public IMNodeIterator getChildrenIterator(IMNode parent) {
-    return new MemMNodeIterator(parent.getChildren().values().iterator());
+    return new MNodeIterator(parent.getChildren().values().iterator());
   }
 
   @Override
   public IMNode addChild(IMNode parent, String childName, IMNode child) {
-    return parent.addChild(childName, child);
+    IMNode result = parent.addChild(childName, child);
+    if (result == child) {
+      requestMemory(estimator.estimateSize(child));
+    }
+    return result;
   }
 
   @Override
   public void deleteChild(IMNode parent, String childName) {
-    parent.deleteChild(childName);
+    releaseMemory(estimator.estimateSize(parent.deleteChild(childName)));
   }
 
   @Override
-  public void updateStorageGroupMNode(IStorageGroupMNode node) {}
+  public void updateMNode(IMNode node) {}
 
   @Override
-  public void updateMNode(IMNode node) {}
+  public IEntityMNode setToEntity(IMNode node) {
+    IEntityMNode result = MNodeUtils.setToEntity(node);
+    if (result != node) {
+      requestMemory(IMNodeSizeEstimator.getEntityNodeBaseSize());
+    }
+
+    if (result.isStorageGroup()) {
+      root = result;
+    }
+    return result;
+  }
+
+  @Override
+  public IMNode setToInternal(IEntityMNode entityMNode) {
+    IMNode result = MNodeUtils.setToInternal(entityMNode);
+    if (result != entityMNode) {
+      releaseMemory(IMNodeSizeEstimator.getEntityNodeBaseSize());
+    }
+    if (result.isStorageGroup()) {
+      root = result;
+    }
+    return result;
+  }
+
+  @Override
+  public void setAlias(IMeasurementMNode measurementMNode, String alias) {
+    String existingAlias = measurementMNode.getAlias();
+    if (existingAlias == null && alias == null) {
+      return;
+    }
+
+    measurementMNode.setAlias(alias);
+    updateMNode(measurementMNode);
+
+    if (existingAlias != null && alias != null) {
+      int delta = alias.length() - existingAlias.length();
+      if (delta > 0) {
+        requestMemory(delta);
+      } else if (delta < 0) {
+        releaseMemory(-delta);
+      }
+    } else if (alias == null) {
+      releaseMemory(IMNodeSizeEstimator.getAliasBaseSize() + existingAlias.length());
+    } else {
+      requestMemory(IMNodeSizeEstimator.getAliasBaseSize() + alias.length());
+    }
+  }
 
   @Override
   public void pin(IMNode node) {}
@@ -88,7 +149,22 @@ public class MemMTreeStore implements IMTreeStore {
   public void unPin(IMNode node) {}
 
   @Override
+  public void unPinPath(IMNode node) {}
+
+  @Override
   public void clear() {
     root = new InternalMNode(null, IoTDBConstant.PATH_ROOT);
+    memoryStatistics.releaseMemory(localMemoryUsage.get());
+    localMemoryUsage.set(0);
+  }
+
+  private void requestMemory(int size) {
+    memoryStatistics.requestMemory(size);
+    localMemoryUsage.getAndUpdate(v -> v += size);
+  }
+
+  private void releaseMemory(int size) {
+    localMemoryUsage.getAndUpdate(v -> v -= size);
+    memoryStatistics.releaseMemory(size);
   }
 }

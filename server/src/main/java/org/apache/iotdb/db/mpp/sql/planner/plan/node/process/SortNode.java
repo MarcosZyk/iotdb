@@ -18,33 +18,43 @@
  */
 package org.apache.iotdb.db.mpp.sql.planner.plan.node.process;
 
+import org.apache.iotdb.commons.utils.TestOnly;
+import org.apache.iotdb.db.mpp.sql.planner.plan.IOutputPlanNode;
+import org.apache.iotdb.db.mpp.sql.planner.plan.node.ColumnHeader;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.PlanNode;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.PlanNodeId;
 import org.apache.iotdb.db.mpp.sql.planner.plan.node.PlanVisitor;
 import org.apache.iotdb.db.mpp.sql.statement.component.OrderBy;
+import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
+import org.apache.iotdb.tsfile.utils.Pair;
 
 import com.google.common.collect.ImmutableList;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * In general, the parameter in sortNode should be pushed down to the upstream operators. In our
  * optimized logical query plan, the sortNode should not appear.
  */
-public class SortNode extends ProcessNode {
+public class SortNode extends ProcessNode implements IOutputPlanNode {
 
-  private final PlanNode child;
+  private PlanNode child;
 
   private final List<String> orderBy;
 
   private OrderBy sortOrder;
 
-  public SortNode(PlanNodeId id, PlanNode child, List<String> orderBy, OrderBy sortOrder) {
+  public SortNode(PlanNodeId id, List<String> orderBy, OrderBy sortOrder) {
     super(id);
-    this.child = child;
     this.orderBy = orderBy;
     this.sortOrder = sortOrder;
+  }
+
+  public SortNode(PlanNodeId id, PlanNode child, List<String> orderBy, OrderBy sortOrder) {
+    this(id, orderBy, sortOrder);
+    this.child = child;
   }
 
   @Override
@@ -53,21 +63,37 @@ public class SortNode extends ProcessNode {
   }
 
   @Override
-  public void addChildren(PlanNode child) {}
-
-  @Override
-  public PlanNode clone() {
-    return null;
+  public void addChild(PlanNode child) {
+    this.child = child;
   }
 
   @Override
-  public PlanNode cloneWithChildren(List<PlanNode> children) {
-    return null;
+  public PlanNode clone() {
+    return new SortNode(getPlanNodeId(), orderBy, sortOrder);
+  }
+
+  @Override
+  public int allowedChildCount() {
+    return ONE_CHILD;
+  }
+
+  @Override
+  public List<ColumnHeader> getOutputColumnHeaders() {
+    return ((IOutputPlanNode) child).getOutputColumnHeaders();
   }
 
   @Override
   public List<String> getOutputColumnNames() {
-    return child.getOutputColumnNames();
+    return ((IOutputPlanNode) child).getOutputColumnNames();
+  }
+
+  @Override
+  public List<TSDataType> getOutputColumnTypes() {
+    return ((IOutputPlanNode) child).getOutputColumnTypes();
+  }
+
+  public OrderBy getSortOrder() {
+    return sortOrder;
   }
 
   @Override
@@ -81,4 +107,12 @@ public class SortNode extends ProcessNode {
 
   @Override
   public void serialize(ByteBuffer byteBuffer) {}
+
+  @TestOnly
+  public Pair<String, List<String>> print() {
+    String title = String.format("[SortNode (%s)]", this.getPlanNodeId());
+    List<String> attributes = new ArrayList<>();
+    attributes.add("SortOrder: " + (this.getSortOrder() == null ? "null" : this.getSortOrder()));
+    return new Pair<>(title, attributes);
+  }
 }

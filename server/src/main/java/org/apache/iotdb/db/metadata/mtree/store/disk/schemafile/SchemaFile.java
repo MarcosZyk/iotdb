@@ -18,7 +18,6 @@
  */
 package org.apache.iotdb.db.metadata.mtree.store.disk.schemafile;
 
-import org.apache.iotdb.commons.partition.SchemaRegionId;
 import org.apache.iotdb.commons.utils.TestOnly;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.engine.fileSystem.SystemFileFactory;
@@ -72,7 +71,6 @@ public class SchemaFile implements ISchemaFile {
   public static int FILE_HEADER_SIZE = 256; // size of file header in bytes
 
   public static int PAGE_LENGTH = 16 * 1024; // 16 kib for default
-  public static int PAGE_LENGTH_DIGIT = 14;
   public static long PAGE_INDEX_MASK = 0xffff_ffffL;
   public static short PAGE_HEADER_SIZE = 16;
   public static int PAGE_CACHE_SIZE =
@@ -103,24 +101,24 @@ public class SchemaFile implements ISchemaFile {
   public static String SCHEMA_FOLDER = IoTDBDescriptor.getInstance().getConfig().getSchemaDir();
 
   // attributes for this schema file
-  String filePath;
-  String storageGroupName;
-  long dataTTL;
+  private String filePath;
+  private String storageGroupName;
+  private long dataTTL;
   boolean isEntity;
-  int templateHash;
+  private int templateHash;
 
-  ByteBuffer headerContent;
-  int lastPageIndex; // last page index of the file, boundary to grow
+  private ByteBuffer headerContent;
+  private int lastPageIndex; // last page index of the file, boundary to grow
 
   // work as a naive (read-only) cache for page instance
-  final Map<Integer, ISchemaPage> pageInstCache;
-  final ReentrantLock evictLock;
-  final PageLocks pageLocks;
-  ISchemaPage rootPage;
+  private final Map<Integer, ISchemaPage> pageInstCache;
+  private final ReentrantLock evictLock;
+  private final PageLocks pageLocks;
+  private ISchemaPage rootPage;
 
   // attributes for file
-  File pmtFile;
-  FileChannel channel;
+  private File pmtFile;
+  private FileChannel channel;
 
   // dirty page management
   Map<Integer, ISchemaPage> dirtyPageTable;
@@ -129,7 +127,7 @@ public class SchemaFile implements ISchemaFile {
   ByteBuffer logBuffer;
 
   private SchemaFile(
-      String sgName, SchemaRegionId schemaRegionId, boolean override, long ttl, boolean isEntity)
+      String sgName, int schemaRegionId, boolean override, long ttl, boolean isEntity)
       throws IOException, MetadataException {
     this.storageGroupName = sgName;
     filePath =
@@ -137,7 +135,7 @@ public class SchemaFile implements ISchemaFile {
             + File.separator
             + sgName
             + File.separator
-            + schemaRegionId.getSchemaRegionId()
+            + schemaRegionId
             + File.separator
             + MetadataConstant.SCHEMA_FILE_NAME;
 
@@ -156,11 +154,7 @@ public class SchemaFile implements ISchemaFile {
     if (!pmtFile.exists() || !pmtFile.isFile()) {
       File folder =
           SystemFileFactory.INSTANCE.getFile(
-              SchemaFile.SCHEMA_FOLDER
-                  + File.separator
-                  + sgName
-                  + File.separator
-                  + schemaRegionId.getSchemaRegionId());
+              SchemaFile.SCHEMA_FOLDER + File.separator + sgName + File.separator + schemaRegionId);
       folder.mkdirs();
       pmtFile.createNewFile();
     }
@@ -192,7 +186,7 @@ public class SchemaFile implements ISchemaFile {
     initLogWriter();
   }
 
-  public static ISchemaFile initSchemaFile(String sgName, SchemaRegionId schemaRegionId)
+  public static ISchemaFile initSchemaFile(String sgName, int schemaRegionId)
       throws IOException, MetadataException {
     return new SchemaFile(
         sgName,
@@ -202,7 +196,7 @@ public class SchemaFile implements ISchemaFile {
         false);
   }
 
-  public static ISchemaFile loadSchemaFile(String sgName, SchemaRegionId schemaRegionId)
+  public static ISchemaFile loadSchemaFile(String sgName, int schemaRegionId)
       throws IOException, MetadataException {
     return new SchemaFile(sgName, schemaRegionId, false, -1L, false);
   }
@@ -222,6 +216,7 @@ public class SchemaFile implements ISchemaFile {
           setNodeAddress(
               new StorageGroupMNode(null, sgPathNodes[sgPathNodes.length - 1], dataTTL), 0L);
     }
+    resNode.setFullPath(storageGroupName);
     if (templateHash != 0) {
       resNode.setSchemaTemplate(TemplateManager.getInstance().getTemplateFromHash(templateHash));
     }
@@ -471,13 +466,8 @@ public class SchemaFile implements ISchemaFile {
       short sIdx = getSegIndex(actualSegAddr);
       logger.error(
           String.format(
-              "Get child[%s] from parent[%s] failed, actualAddress:%s(%d, %d), segOffLst: %s",
-              childName,
-              parent.getName(),
-              actualSegAddr,
-              pIdx,
-              sIdx,
-              ((SchemaPage) getPageInstance(pIdx)).segOffsetLst));
+              "Get child[%s] from parent[%s] failed, actualAddress:%s(%d, %d)",
+              childName, parent.getName(), actualSegAddr, pIdx, sIdx));
       e.printStackTrace();
       throw e;
     }

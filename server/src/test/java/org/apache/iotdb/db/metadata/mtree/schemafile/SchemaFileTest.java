@@ -18,7 +18,6 @@
  */
 package org.apache.iotdb.db.metadata.mtree.schemafile;
 
-import org.apache.iotdb.commons.partition.SchemaRegionId;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.metadata.mnode.EntityMNode;
@@ -35,6 +34,7 @@ import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.RecordUtils;
 import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.SchemaFile;
 import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.SchemaPage;
 import org.apache.iotdb.db.metadata.mtree.store.disk.schemafile.Segment;
+import org.apache.iotdb.db.metadata.schemaregion.SchemaEngineMode;
 import org.apache.iotdb.db.metadata.utils.MetaUtils;
 import org.apache.iotdb.db.utils.EnvironmentUtils;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -58,18 +58,22 @@ import java.util.Set;
 
 public class SchemaFileTest {
 
-  private static final SchemaRegionId TEST_SCHEMA_REGION_ID = new SchemaRegionId(0);
+  private static final int TEST_SCHEMA_REGION_ID = 0;
 
   @Before
   public void setUp() {
-    IoTDBDescriptor.getInstance().getConfig().setEnablePersistentSchema(true);
+    IoTDBDescriptor.getInstance()
+        .getConfig()
+        .setSchemaEngineMode(SchemaEngineMode.Schema_File.toString());
     EnvironmentUtils.envSetUp();
   }
 
   @After
   public void tearDown() throws Exception {
     EnvironmentUtils.cleanEnv();
-    IoTDBDescriptor.getInstance().getConfig().setEnablePersistentSchema(false);
+    IoTDBDescriptor.getInstance()
+        .getConfig()
+        .setSchemaEngineMode(SchemaEngineMode.Memory.toString());
   }
 
   @Test
@@ -478,7 +482,9 @@ public class SchemaFileTest {
     root.addChild(ent4);
 
     while (ent4.getChildren().size() < 19) {
-      ent4.addChild(getMeasurementNode(ent4, "e4m" + ent4.getChildren().size(), "e4malais"));
+      ent4.addChild(
+          getMeasurementNode(
+              ent4, "e4m" + ent4.getChildren().size(), "e4malais" + ent4.getChildren().size()));
     }
     sf.writeMNode(root);
     sf.writeMNode(ent4);
@@ -493,18 +499,24 @@ public class SchemaFileTest {
     sf.writeMNode(ent4);
 
     while (ent2.getChildren().size() < 19) {
-      ent2.addChild(getMeasurementNode(ent2, "e2m" + ent2.getChildren().size(), "e2malais"));
+      ent2.addChild(
+          getMeasurementNode(
+              ent2, "e2m" + ent2.getChildren().size(), "e2malais" + ent2.getChildren().size()));
     }
     sf.writeMNode(ent2);
 
     while (ent3.getChildren().size() < 180) {
-      ent3.addChild(getMeasurementNode(ent3, "e3m" + ent3.getChildren().size(), "e3malais"));
+      ent3.addChild(
+          getMeasurementNode(
+              ent3, "e3m" + ent3.getChildren().size(), "e3malais" + ent3.getChildren().size()));
     }
     sf.writeMNode(ent3);
 
     ent2.getChildren().clear();
     while (ent2.getChildren().size() < 70) {
-      ent2.addChild(getMeasurementNode(ent2, "e2ms" + ent2.getChildren().size(), "e2malais"));
+      ent2.addChild(
+          getMeasurementNode(
+              ent2, "e2ms" + ent2.getChildren().size(), "e2is_s2_" + ent2.getChildren().size()));
     }
     sf.writeMNode(ent2);
 
@@ -519,7 +531,11 @@ public class SchemaFileTest {
     IMNode ent5 = new EntityMNode(root, "ent5");
     root.addChild(ent5);
     while (ent5.getChildren().size() < 19) {
-      ent5.addChild(getMeasurementNode(ent5, "e5mk" + ent5.getChildren().size(), "e5malaikkkkks"));
+      ent5.addChild(
+          getMeasurementNode(
+              ent5,
+              "e5mk" + ent5.getChildren().size(),
+              "e5malaikkkkks" + ent5.getChildren().size()));
     }
 
     sf.writeMNode(root);
@@ -533,6 +549,12 @@ public class SchemaFileTest {
                 + "malaikkkkkse5malaikkkkkse5malaikkkkkse5malaikkkkkse5malaikkkkkse5malaikkkkkse5malaikkkkkse5malaikkkkks"));
     sf.writeMNode(ent5);
     Assert.assertEquals(20, getSegment(sf, getSegAddrInContainer(ent5)).getAllRecords().size());
+
+    ent5.getChildren().clear();
+    addNodeToUpdateBuffer(ent5, getMeasurementNode(ent5, "e5extm", null));
+    sf.writeMNode(ent5);
+
+    Assert.assertEquals(null, sf.getChildNode(ent5, "e5extm").getAsMeasurementMNode().getAlias());
 
     sf.close();
   }
@@ -689,7 +711,7 @@ public class SchemaFileTest {
       IMeasurementSchema schema = new MeasurementSchema("finalM" + idx, TSDataType.FLOAT);
       IMeasurementMNode mNode =
           MeasurementMNode.getMeasurementMNode(
-              internalNode.getAsEntityMNode(), "finalM" + idx, schema, "finalals");
+              internalNode.getAsEntityMNode(), "finalM" + idx, schema, "finalals" + idx);
       curNode.addChild(mNode);
     }
     IMeasurementSchema schema = new MeasurementSchema("finalM", TSDataType.FLOAT);

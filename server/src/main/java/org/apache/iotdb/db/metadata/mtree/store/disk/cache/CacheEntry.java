@@ -22,9 +22,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class CacheEntry {
 
-  protected volatile boolean isVolatile = false;
+  private volatile boolean isVolatile = false;
 
-  protected volatile AtomicInteger semaphore = new AtomicInteger();
+  private final AtomicInteger semaphore = new AtomicInteger();
 
   public boolean isVolatile() {
     return isVolatile;
@@ -43,10 +43,6 @@ public class CacheEntry {
   }
 
   public boolean isPinned() {
-    return semaphore != null && semaphore.get() > 0;
-  }
-
-  public int getPinNumber() {
-    return semaphore.get();
+    return semaphore.get() > 0;
   }
 }

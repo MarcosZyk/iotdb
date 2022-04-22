@@ -18,7 +18,7 @@
  */
 package org.apache.iotdb.db.metadata.schemaregion;
 
-import org.apache.iotdb.commons.partition.SchemaRegionId;
+import org.apache.iotdb.commons.consensus.SchemaRegionId;
 import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.engine.StorageEngine;
@@ -48,6 +48,7 @@ import org.apache.iotdb.db.metadata.mnode.MeasurementMNode;
 import org.apache.iotdb.db.metadata.mtree.MTreeBelowSG;
 import org.apache.iotdb.db.metadata.path.MeasurementPath;
 import org.apache.iotdb.db.metadata.path.PartialPath;
+import org.apache.iotdb.db.metadata.rescon.MemoryStatistics;
 import org.apache.iotdb.db.metadata.rescon.TimeseriesStatistics;
 import org.apache.iotdb.db.metadata.storagegroup.StorageGroupSchemaManager;
 import org.apache.iotdb.db.metadata.tag.TagManager;
@@ -164,6 +165,7 @@ public class SchemaRegion {
   private MLogWriter logWriter;
 
   private TimeseriesStatistics timeseriesStatistics = TimeseriesStatistics.getInstance();
+  private MemoryStatistics memoryStatistics = MemoryStatistics.getInstance();
   private MTreeBelowSG mtree;
   // device -> DeviceMNode
   private LoadingCache<PartialPath, IMNode> mNodeCache;
@@ -177,7 +179,7 @@ public class SchemaRegion {
     storageGroupFullPath = storageGroup.getFullPath();
     this.schemaRegionId = schemaRegionId;
 
-    int cacheSize = config.getSchemaRegionCacheSize();
+    int cacheSize = config.getSchemaRegionDeviceNodeCacheSize();
     mNodeCache =
         Caffeine.newBuilder()
             .maximumSize(cacheSize)
@@ -224,7 +226,7 @@ public class SchemaRegion {
             + File.separator
             + storageGroupFullPath
             + File.separator
-            + schemaRegionId.getSchemaRegionId();
+            + schemaRegionId.getId();
     File schemaRegionFolder = SystemFileFactory.INSTANCE.getFile(schemaRegionDirPath);
     if (!schemaRegionFolder.exists()) {
       if (schemaRegionFolder.mkdirs()) {
@@ -245,7 +247,7 @@ public class SchemaRegion {
       isRecovering = true;
 
       tagManager = new TagManager(schemaRegionDirPath);
-      mtree = new MTreeBelowSG(storageGroupMNode, schemaRegionId);
+      mtree = new MTreeBelowSG(storageGroupMNode, schemaRegionId.getId());
 
       int lineNumber = initFromLog(logFile);
 
@@ -444,7 +446,7 @@ public class SchemaRegion {
 
   @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
   public void createTimeseries(CreateTimeSeriesPlan plan, long offset) throws MetadataException {
-    if (!timeseriesStatistics.isAllowToCreateNewSeries()) {
+    if (!memoryStatistics.isAllowToCreateNewSeries()) {
       throw new MetadataException(
           "IoTDB system load is too large to create timeseries, "
               + "please increase MAX_HEAP_SIZE in iotdb-env.sh/bat and restart");
@@ -559,7 +561,7 @@ public class SchemaRegion {
    * @param plan CreateAlignedTimeSeriesPlan
    */
   public void createAlignedTimeSeries(CreateAlignedTimeSeriesPlan plan) throws MetadataException {
-    if (!timeseriesStatistics.isAllowToCreateNewSeries()) {
+    if (!memoryStatistics.isAllowToCreateNewSeries()) {
       throw new MetadataException(
           "IoTDB system load is too large to create timeseries, "
               + "please increase MAX_HEAP_SIZE in iotdb-env.sh/bat and restart");
@@ -700,8 +702,6 @@ public class SchemaRegion {
       if (!isRecovering) {
         if (emptyStorageGroup != null) {
           StorageEngine.getInstance().deleteAllDataFilesInOneStorageGroup(emptyStorageGroup);
-          StorageEngine.getInstance()
-              .releaseWalDirectByteBufferPoolInOneStorageGroup(emptyStorageGroup);
         }
         deleteTimeSeriesPlan.setDeletePathList(Collections.singletonList(p));
         logWriter.deleteTimeseries(deleteTimeSeriesPlan);
@@ -862,9 +862,12 @@ public class SchemaRegion {
 
   // region Interfaces for level Node info Query
   public List<PartialPath> getNodesListInGivenLevel(
-      PartialPath pathPattern, int nodeLevel, LocalSchemaProcessor.StorageGroupFilter filter)
+      PartialPath pathPattern,
+      int nodeLevel,
+      boolean isPrefixMatch,
+      LocalSchemaProcessor.StorageGroupFilter filter)
       throws MetadataException {
-    return mtree.getNodesListInGivenLevel(pathPattern, nodeLevel, filter);
+    return mtree.getNodesListInGivenLevel(pathPattern, nodeLevel, isPrefixMatch, filter);
   }
 
   /**
@@ -1250,8 +1253,7 @@ public class SchemaRegion {
         leafMNode.getParent().deleteAliasChild(leafMNode.getAlias());
       }
       leafMNode.getParent().addAlias(alias, leafMNode);
-      leafMNode.setAlias(alias);
-      mtree.updateMNode(leafMNode);
+      mtree.setAlias(leafMNode, alias);
     } finally {
       mtree.unPinMNode(leafMNode);
     }
@@ -1322,8 +1324,7 @@ public class SchemaRegion {
         leafMNode.getParent().deleteAliasChild(leafMNode.getAlias());
       }
 
-      leafMNode.setAlias(alias);
-      mtree.updateMNode(leafMNode);
+      mtree.setAlias(leafMNode, alias);
       // persist to WAL
       logWriter.changeAlias(fullPath, alias);
     }

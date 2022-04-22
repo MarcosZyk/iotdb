@@ -19,7 +19,7 @@
 
 package org.apache.iotdb.db.metadata.schemaregion;
 
-import org.apache.iotdb.commons.partition.SchemaRegionId;
+import org.apache.iotdb.commons.consensus.SchemaRegionId;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.metadata.mnode.IStorageGroupMNode;
 import org.apache.iotdb.db.metadata.path.PartialPath;
@@ -56,8 +56,8 @@ public class SchemaEngine {
     }
   }
 
-  public SchemaRegion getSchemaRegion(SchemaRegionId schemaRegionId) {
-    return schemaRegionMap.get(schemaRegionId);
+  public SchemaRegion getSchemaRegion(SchemaRegionId regionId) {
+    return schemaRegionMap.get(regionId);
   }
 
   public Collection<SchemaRegion> getAllSchemaRegions() {
@@ -77,6 +77,7 @@ public class SchemaEngine {
   }
 
   public void deleteSchemaRegion(SchemaRegionId schemaRegionId) throws MetadataException {
-    schemaRegionMap.remove(schemaRegionId).deleteSchemaRegion();
+    schemaRegionMap.get(schemaRegionId).deleteSchemaRegion();
+    schemaRegionMap.remove(schemaRegionId);
   }
 }
