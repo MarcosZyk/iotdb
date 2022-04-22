@@ -32,9 +32,9 @@ import org.apache.iotdb.db.metadata.mnode.StorageGroupMNode;
 import org.apache.iotdb.db.metadata.mtree.store.disk.ICachedMNodeContainer;
 import org.apache.iotdb.db.metadata.template.TemplateManager;
 import org.apache.iotdb.db.metadata.utils.MetaUtils;
-import org.apache.iotdb.db.writelog.io.ILogWriter;
-import org.apache.iotdb.db.writelog.io.LogWriter;
-import org.apache.iotdb.db.writelog.io.SingleFileLogReader;
+import org.apache.iotdb.db.utils.writelog.ILogWriter;
+import org.apache.iotdb.db.utils.writelog.LogWriter;
+import org.apache.iotdb.db.utils.writelog.SingleFileLogReader;
 import org.apache.iotdb.tsfile.utils.ReadWriteIOUtils;
 
 import org.slf4j.Logger;
@@ -101,8 +101,8 @@ public class SchemaFile implements ISchemaFile {
   public static String SCHEMA_FOLDER = IoTDBDescriptor.getInstance().getConfig().getSchemaDir();
 
   // attributes for this schema file
-  private String filePath;
-  private String storageGroupName;
+  private final String filePath;
+  private final String storageGroupName;
   private long dataTTL;
   boolean isEntity;
   private int templateHash;
@@ -117,7 +117,7 @@ public class SchemaFile implements ISchemaFile {
   private ISchemaPage rootPage;
 
   // attributes for file
-  private File pmtFile;
+  private final File pmtFile;
   private FileChannel channel;
 
   // dirty page management
@@ -172,7 +172,7 @@ public class SchemaFile implements ISchemaFile {
                 + File.separator
                 + sgName
                 + File.separator
-                + schemaRegionId.getSchemaRegionId()
+                + schemaRegionId
                 + File.separator
                 + MetadataConstant.SCHEMA_FILE_LOG);
     logBuffer = ByteBuffer.allocate(PAGE_LENGTH);
