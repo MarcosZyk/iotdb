@@ -23,6 +23,9 @@ import org.apache.iotdb.commons.conf.CommonDescriptor;
 import org.apache.iotdb.commons.exception.MetadataException;
 import org.apache.iotdb.commons.file.SystemFileFactory;
 import org.apache.iotdb.commons.path.PartialPath;
+import org.apache.iotdb.commons.schema.filter.SchemaFilter;
+import org.apache.iotdb.commons.schema.filter.SchemaFilterType;
+import org.apache.iotdb.commons.schema.filter.impl.AndFilter;
 import org.apache.iotdb.commons.schema.filter.impl.TagFilter;
 import org.apache.iotdb.commons.schema.node.IMNode;
 import org.apache.iotdb.commons.schema.node.role.IMeasurementMNode;
@@ -33,6 +36,9 @@ import org.apache.iotdb.db.metadata.plan.schemaregion.read.IShowTimeSeriesPlan;
 import org.apache.iotdb.db.metadata.plan.schemaregion.result.ShowTimeSeriesResult;
 import org.apache.iotdb.db.metadata.query.info.ITimeSeriesSchemaInfo;
 import org.apache.iotdb.db.metadata.query.reader.ISchemaReader;
+import org.apache.iotdb.db.metadata.query.reader.SchemaReaderLimitOffsetWrapper;
+import org.apache.iotdb.db.metadata.query.reader.TimeseriesReaderWithViewFetch;
+import org.apache.iotdb.db.metadata.visitor.TimeseriesFilterVisitor;
 import org.apache.iotdb.tsfile.utils.Pair;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -207,23 +213,23 @@ public class TagManager {
 
   public ISchemaReader<ITimeSeriesSchemaInfo> getTimeSeriesReaderWithIndex(
       IShowTimeSeriesPlan plan) {
-    Iterator<IMeasurementMNode<?>> allMatchedNodes =
-        getMatchedTimeseriesInIndex((TagFilter) plan.getSchemaFilter()).iterator();
-    PartialPath pathPattern = plan.getPath();
-    int curOffset = 0;
-    int count = 0;
-    long limit = plan.getLimit();
-    long offset = plan.getOffset();
-    boolean hasLimit = limit > 0 || offset > 0;
-    while (curOffset < offset && allMatchedNodes.hasNext()) {
-      IMeasurementMNode<?> node = allMatchedNodes.next();
-      if (plan.isPrefixMatch()
-          ? pathPattern.prefixMatchFullPath(node.getPartialPath())
-          : pathPattern.matchFullPath(node.getPartialPath())) {
-        curOffset++;
+    SchemaFilter schemaFilter = plan.getSchemaFilter();
+    TagFilter tagFilter;
+    if (schemaFilter.getSchemaFilterType().equals(SchemaFilterType.AND)) {
+      AndFilter andFilter = (AndFilter) schemaFilter;
+      if (andFilter.getLeft().getSchemaFilterType().equals(SchemaFilterType.TAGS_FILTER)) {
+        tagFilter = (TagFilter) andFilter.getLeft();
+      } else {
+        tagFilter = (TagFilter) andFilter.getRight();
       }
+    } else {
+      tagFilter = (TagFilter) schemaFilter;
     }
-    return new ISchemaReader<ITimeSeriesSchemaInfo>() {
+    Iterator<IMeasurementMNode<?>> allMatchedNodes =
+        getMatchedTimeseriesInIndex(tagFilter).iterator();
+    PartialPath pathPattern = plan.getPath();
+    TimeseriesFilterVisitor timeseriesFilterVisitor = new TimeseriesFilterVisitor();
+    ISchemaReader<ITimeSeriesSchemaInfo> reader = new ISchemaReader<ITimeSeriesSchemaInfo>() {
       private ITimeSeriesSchemaInfo nextMatched;
       private Throwable throwable;
 
@@ -247,15 +253,11 @@ public class TagManager {
 
       @Override
       public boolean hasNext() {
-        if (throwable == null) {
-          if (hasLimit && count >= limit) {
-            return false;
-          } else if (nextMatched == null) {
-            try {
-              getNext();
-            } catch (Throwable e) {
-              throwable = e;
-            }
+        if (throwable == null && nextMatched == null) {
+          try {
+            getNext();
+          } catch (Throwable e) {
+            throwable = e;
           }
         }
         return throwable == null && nextMatched != null;
@@ -276,23 +278,33 @@ public class TagManager {
         while (allMatchedNodes.hasNext()) {
           IMeasurementMNode<?> node = allMatchedNodes.next();
           if (plan.isPrefixMatch()
-              ? pathPattern.prefixMatchFullPath(node.getPartialPath())
-              : pathPattern.matchFullPath(node.getPartialPath())) {
+                  ? pathPattern.prefixMatchFullPath(node.getPartialPath())
+                  : pathPattern.matchFullPath(node.getPartialPath())) {
             Pair<Map<String, String>, Map<String, String>> tagAndAttributePair =
-                readTagFile(node.getOffset());
+                    readTagFile(node.getOffset());
             nextMatched =
-                new ShowTimeSeriesResult(
-                    node.getFullPath(),
-                    node.getAlias(),
-                    node.getSchema(),
-                    tagAndAttributePair.left,
-                    tagAndAttributePair.right,
-                    node.getParent().getAsDeviceMNode().isAligned());
-            break;
+                    new ShowTimeSeriesResult(
+                            node.getFullPath(),
+                            node.getAlias(),
+                            node.getSchema(),
+                            tagAndAttributePair.left,
+                            tagAndAttributePair.right,
+                            node.getParent().getAsDeviceMNode().isAligned());
+            if (schemaFilter.accept(timeseriesFilterVisitor, nextMatched)) {
+              break;
+            } else {
+              nextMatched = null;
+            }
           }
         }
       }
     };
+    if (plan.getLimit() > 0 || plan.getOffset() > 0) {
+      return new SchemaReaderLimitOffsetWrapper<>(
+              reader, plan.getLimit(), plan.getOffset());
+    } else {
+      return reader;
+    }
   }
 
   /** remove the node from the tag inverted index */
