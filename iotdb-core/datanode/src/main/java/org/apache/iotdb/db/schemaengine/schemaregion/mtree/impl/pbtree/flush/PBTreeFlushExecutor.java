@@ -89,8 +89,7 @@ public class PBTreeFlushExecutor {
       }
     }
     if (!exceptions.isEmpty()) {
-      throw new MetadataException(
-          exceptions.stream().map(Exception::getMessage).reduce("", (a, b) -> a + ", " + b));
+      throw new MetadataException(exceptions.toString());
     }
   }
 

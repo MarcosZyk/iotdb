@@ -243,7 +243,8 @@ public abstract class PageManager implements IPageManager {
       cacheLock.lock();
       try {
         for (ISchemaPage p : cxt.referredPages.values()) {
-          if (p.getRefCnt().get() == 0) {
+          if (p.getRefCnt().get() == 0 && pageInstCache.get(p.getPageIndex()) == p) {
+            // p.getRefCnt().get() == 0 && pageInstCache.get(p.getPageIndex()) == p
             pageInstCache.remove(p.getPageIndex());
           }
         }
