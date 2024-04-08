@@ -2756,7 +2756,7 @@ public class ClusterConfigTaskExecutor implements IConfigTaskExecutor {
     SettableFuture<ConfigTaskResult> future = SettableFuture.create();
     // Construct request using statement
     TDatabaseSchema databaseSchema = new TDatabaseSchema();
-    databaseSchema.setName(ROOT + PATH_SEPARATOR_CHAR + createDB.getDbName());
+    databaseSchema.setName(transformDBName(createDB.getDbName()));
     try (ConfigNodeClient configNodeClient =
         CONFIG_NODE_CLIENT_MANAGER.borrowClient(ConfigNodeInfo.CONFIG_REGION_ID)) {
       // Send request to some API server
